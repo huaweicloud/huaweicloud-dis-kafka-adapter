@@ -21,11 +21,11 @@ under the License.
     <parent>
         <groupId>com.huaweicloud.dis</groupId>
         <artifactId>huaweicloud-dis-kafka-adapter</artifactId>
-        <version>1.1.2-SNAPSHOT</version>
+        <version>1.1.2</version>
     </parent>
     <groupId>com.huaweicloud.dis</groupId>
     <artifactId>huaweicloud-dis-kafka-adapter-0.11</artifactId>
-    <version>1.1.2-SNAPSHOT</version>
+    <version>1.1.2</version>
     <packaging>jar</packaging>
 
     <name>huaweicloud-dis-kafka-adapter-0.11</name>
