@@ -7,3 +7,6 @@
 # 1.1.2
 - Features
   * add dis spring kafka demo
+
+# 1.1.3
+- Features
