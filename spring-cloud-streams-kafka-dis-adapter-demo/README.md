@@ -1,12 +1,11 @@
-DEMOÊ¹ÓÃËµÃ÷£º
-  1¡¢½øÈëlibsÄ¿Â¼£¬Ö´ĞĞsh 1_install_mvn_3rd_jars.sh
-  2¡¢µ¼ÈëMAVEN¹¤³Ì
-  3¡¢ĞŞ¸ÄDisAdapterUtilsÀàÖĞDISµÄ½ÓÈë²ÎÊı
-  4¡¢ÔÚDIS·şÎñÖĞ´´½¨application.yamlÖĞ¶¨ÒåµÄÁ÷Ãû³Æ£¬ÑùÀıÎªgreetings
-  5¡¢ÔËĞĞStreamKafkaApplication£¬¼´¿É¿´µ½·¢ËÍºÍ½ÓÊÕÊı¾İ
+## DEMOä½¿ç”¨è¯´æ˜ï¼š
+* 1ã€è¿›å…¥libsç›®å½•ï¼Œæ‰§è¡Œsh 1_install_mvn_3rd_jars.sh
+* 2ã€å¯¼å…¥MAVENå·¥ç¨‹
+* 3ã€ä¿®æ”¹DisAdapterUtilsç±»ä¸­DISçš„æ¥å…¥å‚æ•°
+* 4ã€åœ¨DISæœåŠ¡ä¸­åˆ›å»ºapplication.yamlä¸­å®šä¹‰çš„æµåç§°ï¼Œæ ·ä¾‹ä¸ºgreetings
+* 5ã€è¿è¡ŒStreamKafkaApplicationï¼Œå³å¯çœ‹åˆ°å‘é€å’Œæ¥æ”¶æ•°æ®
 
-
-ÏîÄ¿ĞŞ¸Ä£º
-  1¡¢Ôö¼ÓDISKafkaProducerFactoryºÍDISKafkaConsumerFactory
-  2¡¢ĞŞ¸ÄÁËspring KafkaMessageChannelBinderµÄÔ´´úÂë£¬°ÑKafkaProducerFactoryºÍKafkaConsumerFactoryÌæ»»ÎªDISKafkaProducerFactoryºÍDISKafkaConsumerFactory
-  3¡¢½«¿ªÔ´µÄspring-cloud-stream-binder-kafka-1.3.1.RELEASE.jar°üÖĞKafkaMessageChannelBinderÀàÉ¾³ı£¬ĞÂ°ü¼´Îªspring-cloud-stream-binder-kafka-1.3.1.RELEASE-dis.jar
+## é¡¹ç›®ä¿®æ”¹ï¼š
+* 1ã€å¢åŠ DISKafkaProducerFactoryå’ŒDISKafkaConsumerFactory
+* 2ã€ä¿®æ”¹äº†spring KafkaMessageChannelBinderçš„æºä»£ç ï¼ŒæŠŠKafkaProducerFactoryå’ŒKafkaConsumerFactoryæ›¿æ¢ä¸ºDISKafkaProducerFactoryå’ŒDISKafkaConsumerFactory
+* 3ã€å°†å¼€æºçš„spring-cloud-stream-binder-kafka-1.3.1.RELEASE.jaråŒ…ä¸­KafkaMessageChannelBinderç±»åˆ é™¤ï¼Œæ–°åŒ…å³ä¸ºspring-cloud-stream-binder-kafka-1.3.1.RELEASE-dis.jar
