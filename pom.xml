@@ -55,6 +55,7 @@ under the License.
 		<module>huaweicloud-dis-kafka-adapter-0.10</module>
 		<module>huaweicloud-dis-kafka-adapter-1.1.0</module>
         <module>huaweicloud-dis-kafka-adapter-0.11</module>
+        <module>huaweicloud-dis-kafka-adapter-common</module>
     </modules>
 
     <properties>
