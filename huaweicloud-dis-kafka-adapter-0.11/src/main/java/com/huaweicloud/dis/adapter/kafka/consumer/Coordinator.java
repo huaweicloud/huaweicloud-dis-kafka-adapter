@@ -5,7 +5,7 @@
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -20,6 +20,9 @@ import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicLong;
 
+import com.huaweicloud.dis.adapter.kafka.Constants;
+import com.huaweicloud.dis.adapter.kafka.Utils;
+import com.huaweicloud.dis.adapter.kafka.model.ClientState;
 import org.apache.kafka.clients.consumer.NoOffsetForPartitionException;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
@@ -51,9 +54,6 @@ import com.huaweicloud.dis.iface.data.response.GetPartitionCursorResult;
 import com.huaweicloud.dis.iface.stream.request.DescribeStreamRequest;
 import com.huaweicloud.dis.iface.stream.response.DescribeStreamResult;
 import com.huaweicloud.dis.iface.stream.response.PartitionResult;
-import com.huaweicloud.dis.adapter.kafka.Constants;
-import com.huaweicloud.dis.adapter.kafka.Utils;
-import com.huaweicloud.dis.adapter.kafka.model.ClientState;
 import com.huaweicloud.dis.util.JsonUtils;
 
 /**

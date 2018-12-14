@@ -5,7 +5,7 @@
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -26,21 +26,13 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
-import org.apache.kafka.clients.Metadata;
+import com.huaweicloud.dis.adapter.kafka.AbstractAdapter;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.*;
-import org.apache.kafka.clients.producer.internals.ProducerInterceptors;
-import org.apache.kafka.clients.producer.internals.RecordAccumulator;
-import org.apache.kafka.clients.producer.internals.Sender;
 import org.apache.kafka.common.*;
 import org.apache.kafka.common.errors.ProducerFencedException;
-import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.common.metrics.Sensor;
-import org.apache.kafka.common.record.CompressionType;
-import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringSerializer;
-import org.apache.kafka.common.utils.Time;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -54,7 +46,6 @@ import com.huaweicloud.dis.iface.data.response.PutRecordsResultEntry;
 import com.huaweicloud.dis.iface.stream.request.DescribeStreamRequest;
 import com.huaweicloud.dis.iface.stream.response.DescribeStreamResult;
 import com.huaweicloud.dis.producer.DISProducer;
-import com.huaweicloud.dis.adapter.kafka.AbstractAdapter;
 
 public class DISKafkaProducer<K, V> extends AbstractAdapter implements Producer<K, V>
 {

@@ -5,7 +5,7 @@
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -20,12 +20,12 @@ import java.nio.ByteBuffer;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 
+import com.huaweicloud.dis.adapter.kafka.producer.DISKafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
 
 import com.huaweicloud.dis.DISConfig;
-import com.huaweicloud.dis.adapter.kafka.producer.DISKafkaProducer;
 
 public class DisKafkaProducerDemo
 {
@@ -34,7 +34,7 @@ public class DisKafkaProducerDemo
         DISConfig disConfig = new DISConfig();
         disConfig.set("IS_DEFAULT_TRUSTED_JKS_ENABLED", "false");
         
-        Producer<String, byte[]> disKafkaProducer = new DISKafkaProducer<String, byte[]>(disConfig);
+        Producer<String, byte[]> disKafkaProducer = new DISKafkaProducer<>(disConfig);
         
         // 配置流名称，根据实际情况修改为与开通的DIS通道一致的“通道名称”
         String streamName = "zj-ttt";

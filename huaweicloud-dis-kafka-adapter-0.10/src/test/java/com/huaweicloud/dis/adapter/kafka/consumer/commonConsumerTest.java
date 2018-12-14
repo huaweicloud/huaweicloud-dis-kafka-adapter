@@ -5,7 +5,7 @@
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -21,6 +21,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import com.huaweicloud.dis.adapter.kafka.consumer.DISKafkaConsumer;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.PartitionInfo;
@@ -31,7 +32,6 @@ import org.junit.Ignore;
 import org.junit.Test;
 
 import com.huaweicloud.dis.DISConfig;
-import com.huaweicloud.dis.adapter.kafka.consumer.DISKafkaConsumer;
 import com.huaweicloud.dis.exception.DISClientException;
 
 /**

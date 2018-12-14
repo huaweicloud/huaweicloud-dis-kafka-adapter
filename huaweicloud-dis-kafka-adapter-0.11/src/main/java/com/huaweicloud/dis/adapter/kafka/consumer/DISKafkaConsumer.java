@@ -5,7 +5,7 @@
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -23,6 +23,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.regex.Pattern;
 
+import com.huaweicloud.dis.adapter.kafka.AbstractAdapter;
 import org.apache.kafka.clients.consumer.*;
 import org.apache.kafka.clients.consumer.internals.NoOpConsumerRebalanceListener;
 import org.apache.kafka.common.*;
@@ -38,7 +39,6 @@ import com.huaweicloud.dis.iface.stream.request.DescribeStreamRequest;
 import com.huaweicloud.dis.iface.stream.request.ListStreamsRequest;
 import com.huaweicloud.dis.iface.stream.response.DescribeStreamResult;
 import com.huaweicloud.dis.iface.stream.response.ListStreamsResult;
-import com.huaweicloud.dis.adapter.kafka.AbstractAdapter;
 
 
 public class DISKafkaConsumer<K, V> extends AbstractAdapter implements Consumer<K, V>
