@@ -192,12 +192,18 @@ public class DISKafkaConsumer<K, V> implements Consumer<K, V> {
         disConsumer.subscribe(collection, new DisConsumerRebalanceListener() {
             @Override
             public void onPartitionsRevoked(Collection<StreamPartition> partitions) {
-                consumerRebalanceListener.onPartitionsRevoked(convertStreamPartition(partitions));
+                if(consumerRebalanceListener != null)
+                {
+                    consumerRebalanceListener.onPartitionsRevoked(convertStreamPartition(partitions));
+                }
             }
 
             @Override
             public void onPartitionsAssigned(Collection<StreamPartition> partitions) {
-                consumerRebalanceListener.onPartitionsAssigned(convertStreamPartition(partitions));
+                if(consumerRebalanceListener!=null)
+                {
+                    consumerRebalanceListener.onPartitionsAssigned(convertStreamPartition(partitions));
+                }
             }
         });
     }
@@ -217,12 +223,18 @@ public class DISKafkaConsumer<K, V> implements Consumer<K, V> {
         disConsumer.subscribe(pattern, new DisConsumerRebalanceListener() {
             @Override
             public void onPartitionsRevoked(Collection<StreamPartition> partitions) {
-                consumerRebalanceListener.onPartitionsRevoked(convertStreamPartition(partitions));
+                if(consumerRebalanceListener != null)
+                {
+                    consumerRebalanceListener.onPartitionsRevoked(convertStreamPartition(partitions));
+                }
             }
 
             @Override
             public void onPartitionsAssigned(Collection<StreamPartition> partitions) {
-                consumerRebalanceListener.onPartitionsAssigned(convertStreamPartition(partitions));
+                if(consumerRebalanceListener!=null)
+                {
+                    consumerRebalanceListener.onPartitionsAssigned(convertStreamPartition(partitions));
+                }
             }
         });
     }
@@ -259,7 +271,7 @@ public class DISKafkaConsumer<K, V> implements Consumer<K, V> {
 
     @Override
     public void commitSync(Map<TopicPartition, OffsetAndMetadata> offsets) {
-
+        commitAsync(offsets,null);
     }
 
     @Override
@@ -272,14 +284,16 @@ public class DISKafkaConsumer<K, V> implements Consumer<K, V> {
         disConsumer.commitAsync(new DisOffsetCommitCallback() {
             @Override
             public void onComplete(Map<StreamPartition, DisOffsetAndMetadata> offsets, Exception exception) {
-                Map<TopicPartition, OffsetAndMetadata> results = new HashMap<>();
+                Map<TopicPartition, OffsetAndMetadata> results = null;
                 if (offsets != null) {
+                    results = new HashMap<>();
                     for (Map.Entry<StreamPartition, DisOffsetAndMetadata> entry : offsets.entrySet()) {
                         results.put(new TopicPartition(entry.getKey().stream(), entry.getKey().partition()), new OffsetAndMetadata(entry.getValue().offset(), entry.getValue().metadata()));
                     }
+                }
+                if(offsetCommitCallback != null)
+                {
                     offsetCommitCallback.onComplete(results, exception);
-                } else {
-                    offsetCommitCallback.onComplete(null, exception);
                 }
             }
         });
@@ -294,14 +308,16 @@ public class DISKafkaConsumer<K, V> implements Consumer<K, V> {
         disConsumer.commitAsync(tmp, new DisOffsetCommitCallback() {
             @Override
             public void onComplete(Map<StreamPartition, DisOffsetAndMetadata> offsets, Exception exception) {
-                Map<TopicPartition, OffsetAndMetadata> results = new HashMap<>();
+                Map<TopicPartition, OffsetAndMetadata> results = null;
                 if (offsets != null) {
+                    results = new HashMap<>();
                     for (Map.Entry<StreamPartition, DisOffsetAndMetadata> entry : offsets.entrySet()) {
                         results.put(new TopicPartition(entry.getKey().stream(), entry.getKey().partition()), new OffsetAndMetadata(entry.getValue().offset(), entry.getValue().metadata()));
                     }
+                }
+                if(offsetCommitCallback != null)
+                {
                     offsetCommitCallback.onComplete(results, exception);
-                } else {
-                    offsetCommitCallback.onComplete(null, exception);
                 }
             }
         });
