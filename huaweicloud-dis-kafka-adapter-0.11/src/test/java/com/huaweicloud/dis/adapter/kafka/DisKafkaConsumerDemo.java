@@ -38,7 +38,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.huaweicloud.dis.DISConfig;
-import com.huaweicloud.dis.adapter.kafka.consumer.DISKafkaConsumer;
 
 /**
  * Created by z00382129 on 2017/10/31.
@@ -238,7 +237,7 @@ public class DisKafkaConsumerDemo {
             }
             if(System.currentTimeMillis() -  startTime >= 180*1000 && System.currentTimeMillis() -  startTime < 240*1000)
             {
-                log.info("disConsumer.commitAsync(new OffsetCommitCallback()) ");
+                log.info("disConsumer.commitAsync(new DisOffsetCommitCallback()) ");
                 log.info(tp0.toString() + " current position " + disConsumer.position(tp0));
                 //异步提分配给他的partition的checkpoint
                 disConsumer.commitAsync(new OffsetCommitCallback() {
@@ -258,7 +257,7 @@ public class DisKafkaConsumerDemo {
             }
             if(System.currentTimeMillis() -  startTime >= 240*1000 && System.currentTimeMillis() -  startTime < 320*1000)
             {
-                log.info("disConsumer.commitAsync(offsetAndMetadataMap, new OffsetCommitCallback()) ");
+                log.info("disConsumer.commitAsync(offsetAndMetadataMap, new DisOffsetCommitCallback()) ");
                 log.info(tp0.toString() + " current position " + disConsumer.position(tp0));
                 Map<TopicPartition, OffsetAndMetadata> offsetAndMetadataMap = new HashMap<>();
                 offsetAndMetadataMap.put(tp0,new OffsetAndMetadata(disConsumer.position(tp0),"metadata2"));

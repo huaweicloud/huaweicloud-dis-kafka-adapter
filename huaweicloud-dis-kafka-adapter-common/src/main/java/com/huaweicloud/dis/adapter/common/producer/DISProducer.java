@@ -19,7 +19,7 @@ package com.huaweicloud.dis.adapter.common.producer;
 import com.huaweicloud.dis.DISConfig;
 import com.huaweicloud.dis.adapter.common.AbstractAdapter;
 import com.huaweicloud.dis.adapter.common.model.ProduceCallback;
-import com.huaweicloud.dis.adapter.common.model.ProducerRecord;
+import com.huaweicloud.dis.adapter.common.model.DisProducerRecord;
 import com.huaweicloud.dis.core.handler.AsyncHandler;
 import com.huaweicloud.dis.iface.data.request.PutRecordsRequest;
 import com.huaweicloud.dis.iface.data.request.PutRecordsRequestEntry;
@@ -43,16 +43,17 @@ public class DISProducer extends AbstractAdapter implements IDISProducer {
 
     public DISProducer(DISConfig disConfig) {
         super(disConfig);
+        producer = new com.huaweicloud.dis.producer.DISProducer(config);
     }
 
 
     @Override
-    public Future<PutRecordsResult> send(ProducerRecord record) {
+    public Future<PutRecordsResult> send(DisProducerRecord record) {
         return send(record, null);
     }
 
     @Override
-    public Future<PutRecordsResult> send(ProducerRecord record, final ProduceCallback callback) {
+    public Future<PutRecordsResult> send(DisProducerRecord record, final ProduceCallback callback) {
 
         String streamName = record.stream();
         PutRecordsRequest request = new PutRecordsRequest();
@@ -61,7 +62,9 @@ public class DISProducer extends AbstractAdapter implements IDISProducer {
         List<PutRecordsRequestEntry> recordEntries = new ArrayList<PutRecordsRequestEntry>();
 
         PutRecordsRequestEntry entry = new PutRecordsRequestEntry();
-
+        entry.setPartitionId(record.partition().toString());
+        entry.setPartitionKey(record.key());
+        entry.setData(record.value());
         if (record.timestamp() != null) {
             entry.setTimestamp(record.timestamp());
         }

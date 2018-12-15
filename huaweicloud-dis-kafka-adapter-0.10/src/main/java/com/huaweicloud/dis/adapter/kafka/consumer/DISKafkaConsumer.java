@@ -16,26 +16,41 @@
 
 package com.huaweicloud.dis.adapter.kafka.consumer;
 
-import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.regex.Pattern;
-
+import com.huaweicloud.dis.DISConfig;
 import com.huaweicloud.dis.adapter.common.consumer.DISConsumer;
-import com.huaweicloud.dis.adapter.common.consumer.Fetcher;
-import com.huaweicloud.dis.adapter.common.consumer.PartitionCursor;
+import com.huaweicloud.dis.adapter.common.consumer.DisConsumerRebalanceListener;
+import com.huaweicloud.dis.adapter.common.consumer.DisOffsetCommitCallback;
+import com.huaweicloud.dis.adapter.common.model.DisOffsetAndMetadata;
 import com.huaweicloud.dis.adapter.common.model.StreamPartition;
-import org.apache.kafka.clients.consumer.*;
+import com.huaweicloud.dis.iface.data.response.Record;
+import com.huaweicloud.dis.iface.stream.response.DescribeStreamResult;
+import org.apache.kafka.clients.consumer.Consumer;
+import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.clients.consumer.internals.NoOpConsumerRebalanceListener;
-import org.apache.kafka.common.*;
+import org.apache.kafka.common.Metric;
+import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.Node;
+import org.apache.kafka.common.PartitionInfo;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.huaweicloud.dis.DISConfig;
-import com.huaweicloud.dis.iface.data.response.Record;
-import com.huaweicloud.dis.iface.stream.response.DescribeStreamResult;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Properties;
+import java.util.Set;
+import java.util.regex.Pattern;
 
 
 public class DISKafkaConsumer<K, V> implements Consumer<K, V> {
@@ -46,10 +61,6 @@ public class DISKafkaConsumer<K, V> implements Consumer<K, V> {
 
     private Deserializer<K> keyDeserializer;
     private Deserializer<V> valueDeserializer;
-    private String clientId;
-    private String groupId;
-    private Fetcher fetcher;
-    ConcurrentHashMap<TopicPartition, PartitionCursor> nextIterators;
 
     public DISKafkaConsumer(Map configs) {
         this(newDisConfig(configs));
@@ -177,8 +188,8 @@ public class DISKafkaConsumer<K, V> implements Consumer<K, V> {
     }
 
     @Override
-    public void subscribe(Collection<String> collection, org.apache.kafka.clients.consumer.ConsumerRebalanceListener consumerRebalanceListener) {
-        disConsumer.subscribe(collection, new com.huaweicloud.dis.adapter.common.consumer.ConsumerRebalanceListener() {
+    public void subscribe(Collection<String> collection, ConsumerRebalanceListener consumerRebalanceListener) {
+        disConsumer.subscribe(collection, new DisConsumerRebalanceListener() {
             @Override
             public void onPartitionsRevoked(Collection<StreamPartition> partitions) {
                 consumerRebalanceListener.onPartitionsRevoked(convertStreamPartition(partitions));
@@ -202,8 +213,8 @@ public class DISKafkaConsumer<K, V> implements Consumer<K, V> {
     }
 
     @Override
-    public void subscribe(Pattern pattern, org.apache.kafka.clients.consumer.ConsumerRebalanceListener consumerRebalanceListener) {
-        disConsumer.subscribe(pattern, new com.huaweicloud.dis.adapter.common.consumer.ConsumerRebalanceListener() {
+    public void subscribe(Pattern pattern, ConsumerRebalanceListener consumerRebalanceListener) {
+        disConsumer.subscribe(pattern, new DisConsumerRebalanceListener() {
             @Override
             public void onPartitionsRevoked(Collection<StreamPartition> partitions) {
                 consumerRebalanceListener.onPartitionsRevoked(convertStreamPartition(partitions));
@@ -226,6 +237,7 @@ public class DISKafkaConsumer<K, V> implements Consumer<K, V> {
         Map<TopicPartition, List<ConsumerRecord<K, V>>> res = new HashMap<>();
         Map<StreamPartition, List<Record>> records = disConsumer.poll(timeout);
         for (Map.Entry<StreamPartition, List<Record>> entry : records.entrySet()) {
+            TopicPartition partition = new TopicPartition(entry.getKey().stream(), entry.getKey().partition());
             for (Record record : entry.getValue()) {
                 K key = record.getPartitionKey() == null ? null
                         : keyDeserializer.deserialize(entry.getKey().stream(), record.getPartitionKey().getBytes());
@@ -233,8 +245,8 @@ public class DISKafkaConsumer<K, V> implements Consumer<K, V> {
                 ConsumerRecord<K, V> consumerRecord = new ConsumerRecord<K, V>(entry.getKey().stream(),
                         entry.getKey().partition(), Long.valueOf(record.getSequenceNumber()), record.getTimestamp(),
                         TimestampType.forName(record.getTimestampType()), 0L, 0, 0, key, value);
-                res.putIfAbsent(new TopicPartition(entry.getKey().stream(), entry.getKey().partition()), new ArrayList<>());
-                res.get(entry.getKey()).add(consumerRecord);
+                res.putIfAbsent(partition, new ArrayList<>());
+                res.get(partition).add(consumerRecord);
             }
         }
         return new ConsumerRecords<K, V>(res);
@@ -256,13 +268,13 @@ public class DISKafkaConsumer<K, V> implements Consumer<K, V> {
     }
 
     @Override
-    public void commitAsync(org.apache.kafka.clients.consumer.OffsetCommitCallback offsetCommitCallback) {
-        disConsumer.commitAsync(new com.huaweicloud.dis.adapter.common.consumer.OffsetCommitCallback() {
+    public void commitAsync(OffsetCommitCallback offsetCommitCallback) {
+        disConsumer.commitAsync(new DisOffsetCommitCallback() {
             @Override
-            public void onComplete(Map<StreamPartition, com.huaweicloud.dis.adapter.common.model.OffsetAndMetadata> offsets, Exception exception) {
+            public void onComplete(Map<StreamPartition, DisOffsetAndMetadata> offsets, Exception exception) {
                 Map<TopicPartition, OffsetAndMetadata> results = new HashMap<>();
                 if (offsets != null) {
-                    for (Map.Entry<StreamPartition, com.huaweicloud.dis.adapter.common.model.OffsetAndMetadata> entry : offsets.entrySet()) {
+                    for (Map.Entry<StreamPartition, DisOffsetAndMetadata> entry : offsets.entrySet()) {
                         results.put(new TopicPartition(entry.getKey().stream(), entry.getKey().partition()), new OffsetAndMetadata(entry.getValue().offset(), entry.getValue().metadata()));
                     }
                     offsetCommitCallback.onComplete(results, exception);
@@ -274,17 +286,17 @@ public class DISKafkaConsumer<K, V> implements Consumer<K, V> {
     }
 
     @Override
-    public void commitAsync(Map<TopicPartition, OffsetAndMetadata> map, org.apache.kafka.clients.consumer.OffsetCommitCallback offsetCommitCallback) {
-        Map<StreamPartition, com.huaweicloud.dis.adapter.common.model.OffsetAndMetadata> tmp = new HashMap<>();
+    public void commitAsync(Map<TopicPartition, OffsetAndMetadata> map, OffsetCommitCallback offsetCommitCallback) {
+        Map<StreamPartition, DisOffsetAndMetadata> tmp = new HashMap<>();
         for (Map.Entry<TopicPartition, OffsetAndMetadata> entry : map.entrySet()) {
-            tmp.put(new StreamPartition(entry.getKey().topic(), entry.getKey().partition()), new com.huaweicloud.dis.adapter.common.model.OffsetAndMetadata(entry.getValue().offset(), entry.getValue().metadata()));
+            tmp.put(new StreamPartition(entry.getKey().topic(), entry.getKey().partition()), new DisOffsetAndMetadata(entry.getValue().offset(), entry.getValue().metadata()));
         }
-        disConsumer.commitAsync(tmp, new com.huaweicloud.dis.adapter.common.consumer.OffsetCommitCallback() {
+        disConsumer.commitAsync(tmp, new DisOffsetCommitCallback() {
             @Override
-            public void onComplete(Map<StreamPartition, com.huaweicloud.dis.adapter.common.model.OffsetAndMetadata> offsets, Exception exception) {
+            public void onComplete(Map<StreamPartition, DisOffsetAndMetadata> offsets, Exception exception) {
                 Map<TopicPartition, OffsetAndMetadata> results = new HashMap<>();
                 if (offsets != null) {
-                    for (Map.Entry<StreamPartition, com.huaweicloud.dis.adapter.common.model.OffsetAndMetadata> entry : offsets.entrySet()) {
+                    for (Map.Entry<StreamPartition, DisOffsetAndMetadata> entry : offsets.entrySet()) {
                         results.put(new TopicPartition(entry.getKey().stream(), entry.getKey().partition()), new OffsetAndMetadata(entry.getValue().offset(), entry.getValue().metadata()));
                     }
                     offsetCommitCallback.onComplete(results, exception);
@@ -317,9 +329,9 @@ public class DISKafkaConsumer<K, V> implements Consumer<K, V> {
 
     @Override
     public OffsetAndMetadata committed(TopicPartition partition) {
-        com.huaweicloud.dis.adapter.common.model.OffsetAndMetadata offsetAndMetadata = disConsumer.committed(new StreamPartition(partition.topic(), partition.partition()));
-        if (offsetAndMetadata != null) {
-            return new OffsetAndMetadata(offsetAndMetadata.offset(), offsetAndMetadata.metadata());
+        DisOffsetAndMetadata disOffsetAndMetadata = disConsumer.committed(new StreamPartition(partition.topic(), partition.partition()));
+        if (disOffsetAndMetadata != null) {
+            return new OffsetAndMetadata(disOffsetAndMetadata.offset(), disOffsetAndMetadata.metadata());
         }
         return null;
     }

@@ -16,11 +16,11 @@
 
 package com.huaweicloud.dis.adapter.common.consumer;
 
-import com.huaweicloud.dis.adapter.common.model.OffsetAndMetadata;
+import com.huaweicloud.dis.adapter.common.model.DisOffsetAndMetadata;
 import com.huaweicloud.dis.adapter.common.model.StreamPartition;
 
 import java.util.Map;
 
-public interface OffsetCommitCallback {
-    void onComplete(Map<StreamPartition, OffsetAndMetadata> offsets, Exception exception);
+public interface DisOffsetCommitCallback {
+    void onComplete(Map<StreamPartition, DisOffsetAndMetadata> offsets, Exception exception);
 }

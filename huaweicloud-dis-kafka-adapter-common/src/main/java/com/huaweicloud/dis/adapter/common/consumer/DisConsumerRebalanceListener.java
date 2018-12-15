@@ -20,7 +20,7 @@ import com.huaweicloud.dis.adapter.common.model.StreamPartition;
 
 import java.util.Collection;
 
-public interface ConsumerRebalanceListener {
+public interface DisConsumerRebalanceListener {
 
     void onPartitionsRevoked(Collection<StreamPartition> partitions);
 

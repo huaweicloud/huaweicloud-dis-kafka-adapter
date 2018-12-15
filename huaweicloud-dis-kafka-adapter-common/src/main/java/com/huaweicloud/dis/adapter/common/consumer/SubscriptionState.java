@@ -21,8 +21,8 @@ package com.huaweicloud.dis.adapter.common.consumer;
  * base on apache common client 0.10.0.1
  */
 
-import com.huaweicloud.dis.adapter.common.model.OffsetAndMetadata;
-import com.huaweicloud.dis.adapter.common.model.OffsetResetStrategy;
+import com.huaweicloud.dis.adapter.common.model.DisOffsetAndMetadata;
+import com.huaweicloud.dis.adapter.common.model.DisOffsetResetStrategy;
 import com.huaweicloud.dis.adapter.common.model.StreamPartition;
 
 import java.util.Collection;
@@ -65,10 +65,10 @@ public class SubscriptionState {
     private boolean needsFetchCommittedOffsets;
 
     /* Default offset reset strategy */
-    private final OffsetResetStrategy defaultResetStrategy;
+    private final DisOffsetResetStrategy defaultResetStrategy;
 
     /* Listener to be invoked when assignment changes */
-    private ConsumerRebalanceListener listener;
+    private DisConsumerRebalanceListener listener;
 
     private static final String SUBSCRIPTION_EXCEPTION_MESSAGE =
             "Subscription to topics, partitions and pattern are mutually exclusive";
@@ -87,7 +87,7 @@ public class SubscriptionState {
             throw new IllegalStateException(SUBSCRIPTION_EXCEPTION_MESSAGE);
     }
 
-    public SubscriptionState(OffsetResetStrategy defaultResetStrategy) {
+    public SubscriptionState(DisOffsetResetStrategy defaultResetStrategy) {
         this.defaultResetStrategy = defaultResetStrategy;
         this.subscription = new HashSet<>();
         this.userAssignment = new HashSet<>();
@@ -99,7 +99,7 @@ public class SubscriptionState {
         this.subscriptionType = SubscriptionType.NONE;
     }
 
-    public void subscribe(Collection<String> topics, ConsumerRebalanceListener listener) {
+    public void subscribe(Collection<String> topics, DisConsumerRebalanceListener listener) {
         if (listener == null)
             throw new IllegalArgumentException("RebalanceListener cannot be null");
 
@@ -178,7 +178,7 @@ public class SubscriptionState {
         this.needsPartitionAssignment = false;
     }
 
-    public void subscribe(Pattern pattern, ConsumerRebalanceListener listener) {
+    public void subscribe(Pattern pattern, DisConsumerRebalanceListener listener) {
         if (listener == null)
             throw new IllegalArgumentException("RebalanceListener cannot be null");
 
@@ -244,11 +244,11 @@ public class SubscriptionState {
         return state;
     }
 
-    public void committed(StreamPartition tp, OffsetAndMetadata offset) {
+    public void committed(StreamPartition tp, DisOffsetAndMetadata offset) {
         assignedState(tp).committed(offset);
     }
 
-    public OffsetAndMetadata committed(StreamPartition tp) {
+    public DisOffsetAndMetadata committed(StreamPartition tp) {
         return assignedState(tp).committed;
     }
 
@@ -293,18 +293,18 @@ public class SubscriptionState {
         return assignedState(tp).position;
     }
 
-    public Map<StreamPartition, OffsetAndMetadata> allConsumed() {
-        Map<StreamPartition, OffsetAndMetadata> allConsumed = new HashMap<>();
+    public Map<StreamPartition, DisOffsetAndMetadata> allConsumed() {
+        Map<StreamPartition, DisOffsetAndMetadata> allConsumed = new HashMap<>();
         for (Map.Entry<StreamPartition, StreamPartitionState> entry : assignment.entrySet()) {
             StreamPartitionState state = entry.getValue();
             if (state.hasValidPosition())
-                allConsumed.put(entry.getKey(), new OffsetAndMetadata(state.position));
+                allConsumed.put(entry.getKey(), new DisOffsetAndMetadata(state.position));
         }
         return allConsumed;
     }
 
-    public void needOffsetReset(StreamPartition partition, OffsetResetStrategy offsetResetStrategy) {
-        assignedState(partition).awaitReset(offsetResetStrategy);
+    public void needOffsetReset(StreamPartition partition, DisOffsetResetStrategy disOffsetResetStrategy) {
+        assignedState(partition).awaitReset(disOffsetResetStrategy);
     }
 
     public void needOffsetReset(StreamPartition partition) {
@@ -312,14 +312,14 @@ public class SubscriptionState {
     }
 
     public boolean hasDefaultOffsetResetPolicy() {
-        return defaultResetStrategy != OffsetResetStrategy.NONE;
+        return defaultResetStrategy != DisOffsetResetStrategy.NONE;
     }
 
     public boolean isOffsetResetNeeded(StreamPartition partition) {
         return assignedState(partition).awaitingReset();
     }
 
-    public OffsetResetStrategy resetStrategy(StreamPartition partition) {
+    public DisOffsetResetStrategy resetStrategy(StreamPartition partition) {
         return assignedState(partition).resetStrategy;
     }
 
@@ -366,15 +366,15 @@ public class SubscriptionState {
         this.assignment.put(tp, new StreamPartitionState());
     }
 
-    public ConsumerRebalanceListener listener() {
+    public DisConsumerRebalanceListener listener() {
         return listener;
     }
 
     private static class StreamPartitionState {
         private Long position; // last consumed position
-        private OffsetAndMetadata committed;  // last committed position
+        private DisOffsetAndMetadata committed;  // last committed position
         private boolean paused;  // whether this partition has been paused by the user
-        private OffsetResetStrategy resetStrategy;  // the strategy to use if the offset needs resetting
+        private DisOffsetResetStrategy resetStrategy;  // the strategy to use if the offset needs resetting
 
         public StreamPartitionState() {
             this.paused = false;
@@ -383,7 +383,7 @@ public class SubscriptionState {
             this.resetStrategy = null;
         }
 
-        private void awaitReset(OffsetResetStrategy strategy) {
+        private void awaitReset(DisOffsetResetStrategy strategy) {
             this.resetStrategy = strategy;
             this.position = null;
         }
@@ -407,7 +407,7 @@ public class SubscriptionState {
             this.position = offset;
         }
 
-        private void committed(OffsetAndMetadata offset) {
+        private void committed(DisOffsetAndMetadata offset) {
             this.committed = offset;
         }
 

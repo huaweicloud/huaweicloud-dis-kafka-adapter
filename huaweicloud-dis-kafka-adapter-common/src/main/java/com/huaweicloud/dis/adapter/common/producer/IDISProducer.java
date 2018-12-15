@@ -16,8 +16,8 @@
 
 package com.huaweicloud.dis.adapter.common.producer;
 
+import com.huaweicloud.dis.adapter.common.model.DisProducerRecord;
 import com.huaweicloud.dis.adapter.common.model.ProduceCallback;
-import com.huaweicloud.dis.adapter.common.model.ProducerRecord;
 import com.huaweicloud.dis.iface.data.response.PutRecordsResult;
 import com.huaweicloud.dis.iface.stream.response.DescribeStreamResult;
 
@@ -26,12 +26,12 @@ import java.util.concurrent.TimeUnit;
 
 public interface IDISProducer {
 
-    public Future<PutRecordsResult> send(ProducerRecord record);
+    public Future<PutRecordsResult> send(DisProducerRecord record);
 
     /**
      * Send a record and invoke the given callback when the record has been acknowledged by the server
      */
-    public Future<PutRecordsResult> send(ProducerRecord record, ProduceCallback callback);
+    public Future<PutRecordsResult> send(DisProducerRecord record, ProduceCallback callback);
 
     /**
      * Flush any accumulated records from the producer. Blocks until all sends are complete.

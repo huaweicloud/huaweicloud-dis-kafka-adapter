@@ -18,12 +18,14 @@ package com.huaweicloud.dis.adapter.kafka.producer;
 
 import com.huaweicloud.dis.DISConfig;
 import com.huaweicloud.dis.adapter.common.Utils;
+import com.huaweicloud.dis.adapter.common.model.DisProducerRecord;
 import com.huaweicloud.dis.adapter.common.producer.DISProducer;
 import com.huaweicloud.dis.adapter.common.producer.IDISProducer;
 import com.huaweicloud.dis.core.util.StringUtils;
 import com.huaweicloud.dis.iface.data.response.PutRecordsResult;
 import com.huaweicloud.dis.iface.data.response.PutRecordsResultEntry;
 import com.huaweicloud.dis.iface.stream.response.DescribeStreamResult;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
@@ -33,6 +35,7 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringSerializer;
@@ -153,7 +156,7 @@ public class DISKafkaProducer<K, V> implements Producer<K, V> {
             key = new String(keySerializer.serialize(stream, k));
         }
 
-        Future<PutRecordsResult> putResultFuture = disProducer.send(new com.huaweicloud.dis.adapter.common.model.ProducerRecord(stream, partition, timestamp, key, value));
+        Future<PutRecordsResult> putResultFuture = disProducer.send(new DisProducerRecord(stream, partition, timestamp, key, value));
         return new RecordMetadataFuture(stream, putResultFuture);
 
     }
@@ -169,7 +172,7 @@ public class DISKafkaProducer<K, V> implements Producer<K, V> {
 
         RecordMetadata recordMetadata =
                 new RecordMetadata(new TopicPartition(streamName, partitionNum), 0,
-                        Long.parseLong(resultEntry.getSequenceNumber()), Record.NO_TIMESTAMP, -1, -1, -1);
+                        Long.parseLong(resultEntry.getSequenceNumber()), -1, -1, -1, -1);
 
         return recordMetadata;
     }
@@ -258,4 +261,28 @@ public class DISKafkaProducer<K, V> implements Producer<K, V> {
 
     }
 
+    @Override
+    public void initTransactions() {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public void beginTransaction() throws ProducerFencedException {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public void sendOffsetsToTransaction(Map<TopicPartition, OffsetAndMetadata> map, String s) throws ProducerFencedException {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public void commitTransaction() throws ProducerFencedException {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public void abortTransaction() throws ProducerFencedException {
+        throw new UnsupportedOperationException();
+    }
 }

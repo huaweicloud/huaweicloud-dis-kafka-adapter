@@ -30,4 +30,6 @@ public class Constants {
 
     public static final String ERROR_CODE_APP_NAME_EXIST = "DIS.4330";
 
+    public static final String AT_TIMESTAMP = "AT_TIMESTAMP";
+
 }

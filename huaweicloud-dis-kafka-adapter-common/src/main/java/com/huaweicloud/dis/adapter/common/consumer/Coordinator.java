@@ -23,8 +23,8 @@ import com.huaweicloud.dis.DISConfig;
 import com.huaweicloud.dis.adapter.common.Constants;
 import com.huaweicloud.dis.adapter.common.Utils;
 import com.huaweicloud.dis.adapter.common.model.ClientState;
-import com.huaweicloud.dis.adapter.common.model.OffsetAndMetadata;
-import com.huaweicloud.dis.adapter.common.model.OffsetResetStrategy;
+import com.huaweicloud.dis.adapter.common.model.DisOffsetAndMetadata;
+import com.huaweicloud.dis.adapter.common.model.DisOffsetResetStrategy;
 import com.huaweicloud.dis.adapter.common.model.StreamPartition;
 import com.huaweicloud.dis.core.handler.AsyncHandler;
 import com.huaweicloud.dis.core.util.StringUtils;
@@ -210,9 +210,9 @@ public class Coordinator {
         @Override
         void doRequest() {
             if (!subscriptions.assignedPartitions().isEmpty()) {
-                commitAsync(subscriptions.allConsumed(), new OffsetCommitCallback() {
+                commitAsync(subscriptions.allConsumed(), new DisOffsetCommitCallback() {
                     @Override
-                    public void onComplete(Map<StreamPartition, OffsetAndMetadata> map, Exception e) {
+                    public void onComplete(Map<StreamPartition, DisOffsetAndMetadata> map, Exception e) {
                         reschedule();
                     }
                 });
@@ -333,18 +333,18 @@ public class Coordinator {
     }
 
 
-    public void commitSync(Map<StreamPartition, OffsetAndMetadata> offsets) {
+    public void commitSync(Map<StreamPartition, DisOffsetAndMetadata> offsets) {
         if (StringUtils.isNullOrEmpty(this.groupId)) {
             throw new IllegalStateException("groupId not defined, checkpoint not commit");
         }
-        for (Map.Entry<StreamPartition, OffsetAndMetadata> offset : offsets.entrySet()) {
+        for (Map.Entry<StreamPartition, DisOffsetAndMetadata> offset : offsets.entrySet()) {
             if (!subscriptions.isAssigned(offset.getKey())) {
                 throw new IllegalStateException(offset.getKey().toString() + " is not assigned!");
             }
         }
 
         final CountDownLatch countDownLatch = new CountDownLatch(offsets.size());
-        for (Map.Entry<StreamPartition, OffsetAndMetadata> offset : offsets.entrySet()) {
+        for (Map.Entry<StreamPartition, DisOffsetAndMetadata> offset : offsets.entrySet()) {
             CommitCheckpointRequest commitCheckpointRequest = new CommitCheckpointRequest();
             commitCheckpointRequest.setCheckpointType(Constants.CHECKPOINT_LAST_READ);
             commitCheckpointRequest.setSequenceNumber(String.valueOf(offset.getValue().offset()));
@@ -372,7 +372,7 @@ public class Coordinator {
         }
     }
 
-    public void commitAsync(Map<StreamPartition, OffsetAndMetadata> offsets, OffsetCommitCallback callback) {
+    public void commitAsync(Map<StreamPartition, DisOffsetAndMetadata> offsets, DisOffsetCommitCallback callback) {
         try {
             commitSync(offsets);
             if (callback != null) {
@@ -454,8 +454,8 @@ public class Coordinator {
                 for (PartitionResult partitionResult : describeStreamResult.getPartitions()) {
                     if (Utils.getKafkaPartitionFromPartitionId(partitionResult.getPartitionId()) == parts.get(index)) {
                         StreamPartition partition = new StreamPartition(entry.getKey(), parts.get(index));
-                        OffsetResetStrategy strategy = subscriptions.resetStrategy(partition);
-                        if (strategy != OffsetResetStrategy.EARLIEST && strategy != OffsetResetStrategy.LATEST) {
+                        DisOffsetResetStrategy strategy = subscriptions.resetStrategy(partition);
+                        if (strategy != DisOffsetResetStrategy.EARLIEST && strategy != DisOffsetResetStrategy.LATEST) {
                             throw new NoOffsetForPartitionException(partition);
                         }
 
@@ -473,9 +473,9 @@ public class Coordinator {
                             startOffset = Long.valueOf(array[0].trim());
                             endOffset = Long.valueOf(array[1].trim());
                         }
-                        if (strategy == OffsetResetStrategy.EARLIEST) {
+                        if (strategy == DisOffsetResetStrategy.EARLIEST) {
                             offset = startOffset;
-                        } else if (strategy == OffsetResetStrategy.LATEST) {
+                        } else if (strategy == DisOffsetResetStrategy.LATEST) {
                             offset = endOffset;
                         }
                         if (offset == -1) {
@@ -514,8 +514,8 @@ public class Coordinator {
     }
 
     private void resetOffset(StreamPartition partition) {
-        OffsetResetStrategy strategy = subscriptions.resetStrategy(partition);
-        if (strategy != OffsetResetStrategy.EARLIEST && strategy != OffsetResetStrategy.LATEST) {
+        DisOffsetResetStrategy strategy = subscriptions.resetStrategy(partition);
+        if (strategy != DisOffsetResetStrategy.EARLIEST && strategy != DisOffsetResetStrategy.LATEST) {
             throw new NoOffsetForPartitionException(partition);
         }
         String partitionId = partition.partition() == 0 ? "" : Utils.getShardIdStringFromPartitionId(partition.partition() - 1);
@@ -538,9 +538,9 @@ public class Coordinator {
             startOffset = Long.valueOf(array[0].trim());
             endOffset = Long.valueOf(array[1].trim());
         }
-        if (strategy == OffsetResetStrategy.EARLIEST) {
+        if (strategy == DisOffsetResetStrategy.EARLIEST) {
             offset = startOffset;
-        } else if (strategy == OffsetResetStrategy.LATEST) {
+        } else if (strategy == DisOffsetResetStrategy.LATEST) {
             offset = endOffset;
         }
         if (offset == -1) {
@@ -563,8 +563,8 @@ public class Coordinator {
             return;
         }
         if (subscriptions.refreshCommitsNeeded()) {
-            Map<StreamPartition, OffsetAndMetadata> offsets = fetchCommittedOffsets(subscriptions.assignedPartitions());
-            for (Map.Entry<StreamPartition, OffsetAndMetadata> entry : offsets.entrySet()) {
+            Map<StreamPartition, DisOffsetAndMetadata> offsets = fetchCommittedOffsets(subscriptions.assignedPartitions());
+            for (Map.Entry<StreamPartition, DisOffsetAndMetadata> entry : offsets.entrySet()) {
                 StreamPartition tp = entry.getKey();
                 // verify assignment is still active
                 if (subscriptions.isAssigned(tp))
@@ -574,8 +574,8 @@ public class Coordinator {
         }
     }
 
-    public Map<StreamPartition, OffsetAndMetadata> fetchCommittedOffsets(Set<StreamPartition> partitions) {
-        Map<StreamPartition, OffsetAndMetadata> offsets = new HashMap<>();
+    public Map<StreamPartition, DisOffsetAndMetadata> fetchCommittedOffsets(Set<StreamPartition> partitions) {
+        Map<StreamPartition, DisOffsetAndMetadata> offsets = new HashMap<>();
         for (StreamPartition partition : partitions) {
             GetCheckpointRequest getCheckpointRequest = new GetCheckpointRequest();
             getCheckpointRequest.setStreamName(partition.stream());
@@ -591,7 +591,7 @@ public class Coordinator {
             if (!StringUtils.isNullOrEmpty(getCheckpointResult.getSequenceNumber())
                     && Long.valueOf(getCheckpointResult.getSequenceNumber()) >= 0) {
                 offsets.put(partition,
-                        new OffsetAndMetadata(Long.valueOf(getCheckpointResult.getSequenceNumber()),
+                        new DisOffsetAndMetadata(Long.valueOf(getCheckpointResult.getSequenceNumber()),
                                 getCheckpointResult.getMetadata()));
             }
         }

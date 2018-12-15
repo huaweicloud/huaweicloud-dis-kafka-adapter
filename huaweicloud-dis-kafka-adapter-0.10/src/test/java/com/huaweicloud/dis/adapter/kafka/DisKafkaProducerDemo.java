@@ -52,7 +52,7 @@ public class DisKafkaProducerDemo
         {
             partitionId = 0;
             String key = "" + i;
-//            ProducerRecord<String, byte[]> record = new ProducerRecord<String, byte[]>(streamName, key, buffer.array());
+//            DisProducerRecord<String, byte[]> record = new DisProducerRecord<String, byte[]>(streamName, key, buffer.array());
             ProducerRecord<String, byte[]> record = new ProducerRecord<String, byte[]>(streamName, partitionId, System.currentTimeMillis(),key, buffer.array());
             
             

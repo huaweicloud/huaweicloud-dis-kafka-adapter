@@ -17,12 +17,21 @@
 package com.huaweicloud.dis.adapter.common;
 
 import com.huaweicloud.dis.DISConfig;
+import com.huaweicloud.dis.adapter.common.consumer.PartitionCursor;
+import com.huaweicloud.dis.adapter.common.model.PartitionIterator;
+import com.huaweicloud.dis.util.JsonUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+import java.io.UnsupportedEncodingException;
+import java.util.Base64;
 import java.util.Collection;
 import java.util.Iterator;
 import java.util.Map;
 
 public class Utils {
+
+    private static final Logger log = LoggerFactory.getLogger(Utils.class);
 
     static final String PARTITION_ID = "shardId";
 
@@ -53,4 +62,27 @@ public class Utils {
         disConfig.putAll(map);
         return disConfig;
     }
+
+    public static int longHashcode(long value) {
+        return (int) (value ^ (value >>> 32));
+    }
+
+    public static PartitionIterator decodeIterator(String iterator)
+    {
+        PartitionIterator partitionIterator = null;
+        try {
+            String value = new String(Base64.getUrlDecoder().decode(iterator),"UTF-8");
+            partitionIterator = JsonUtils.jsonToObj(value,PartitionIterator.class);
+        }
+        catch (UnsupportedEncodingException e)
+        {
+            log.error(e.getMessage(),e);
+        }
+        if(partitionIterator == null)
+        {
+            throw new IllegalArgumentException("cannot parse " + iterator);
+        }
+        return partitionIterator;
+    }
+
 }

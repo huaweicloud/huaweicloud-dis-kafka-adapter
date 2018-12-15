@@ -18,21 +18,27 @@ package com.huaweicloud.dis.adapter.common.consumer;
 
 import com.huaweicloud.dis.DISConfig;
 import com.huaweicloud.dis.adapter.common.AbstractAdapter;
+import com.huaweicloud.dis.adapter.common.Constants;
 import com.huaweicloud.dis.adapter.common.Utils;
-import com.huaweicloud.dis.adapter.common.model.OffsetAndMetadata;
-import com.huaweicloud.dis.adapter.common.model.OffsetResetStrategy;
+import com.huaweicloud.dis.adapter.common.model.DisOffsetAndMetadata;
+import com.huaweicloud.dis.adapter.common.model.DisOffsetResetStrategy;
+import com.huaweicloud.dis.adapter.common.model.PartitionIterator;
 import com.huaweicloud.dis.adapter.common.model.StreamPartition;
+import com.huaweicloud.dis.iface.data.request.GetPartitionCursorRequest;
+import com.huaweicloud.dis.iface.data.response.GetPartitionCursorResult;
 import com.huaweicloud.dis.iface.data.response.Record;
 import com.huaweicloud.dis.iface.stream.request.DescribeStreamRequest;
 import com.huaweicloud.dis.iface.stream.request.ListStreamsRequest;
 import com.huaweicloud.dis.iface.stream.response.DescribeStreamResult;
 import com.huaweicloud.dis.iface.stream.response.ListStreamsResult;
+import com.huaweicloud.dis.iface.stream.response.PartitionResult;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.ConcurrentModificationException;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -68,8 +74,8 @@ public class DISConsumer extends AbstractAdapter implements IDISConsumer {
         super(disConfig);
         this.clientId = disConfig.get("client.id", "consumer-" + UUID.randomUUID());
         this.groupId = disConfig.get("group.id", "");
-        OffsetResetStrategy offsetResetStrategy = OffsetResetStrategy.valueOf(disConfig.get("auto.offset.reset", "LATEST").toUpperCase());
-        this.subscriptions = new SubscriptionState(offsetResetStrategy);
+        DisOffsetResetStrategy disOffsetResetStrategy = DisOffsetResetStrategy.valueOf(disConfig.get("auto.offset.reset", "LATEST").toUpperCase());
+        this.subscriptions = new SubscriptionState(disOffsetResetStrategy);
         this.nextIterators = new ConcurrentHashMap<>();
         boolean autoCommitEnabled = disConfig.getBoolean("enable.auto.commit", true);
         long autoCommitIntervalMs = Long.valueOf(disConfig.get("auto.commit.interval.ms", "5000"));
@@ -109,7 +115,7 @@ public class DISConsumer extends AbstractAdapter implements IDISConsumer {
     }
 
     @Override
-    public void subscribe(Collection<String> streams, ConsumerRebalanceListener listener) {
+    public void subscribe(Collection<String> streams, DisConsumerRebalanceListener listener) {
         acquire();
         try {
             if (streams.isEmpty()) {
@@ -125,7 +131,7 @@ public class DISConsumer extends AbstractAdapter implements IDISConsumer {
 
     @Override
     public void subscribe(Collection<String> streams) {
-        subscribe(streams, new NoOpConsumerRebalanceListener());
+        subscribe(streams, new DisNoOpDisConsumerRebalanceListener());
     }
 
     @Override
@@ -141,7 +147,7 @@ public class DISConsumer extends AbstractAdapter implements IDISConsumer {
     }
 
     @Override
-    public void subscribe(Pattern pattern, ConsumerRebalanceListener callback) {
+    public void subscribe(Pattern pattern, DisConsumerRebalanceListener callback) {
         acquire();
         try {
             log.debug("Subscribed to pattern: {}", pattern);
@@ -195,7 +201,7 @@ public class DISConsumer extends AbstractAdapter implements IDISConsumer {
     }
 
     @Override
-    public void commitSync(Map<StreamPartition, OffsetAndMetadata> offsets) {
+    public void commitSync(Map<StreamPartition, DisOffsetAndMetadata> offsets) {
         acquire();
         try {
             coordinator.commitSync(offsets);
@@ -210,7 +216,7 @@ public class DISConsumer extends AbstractAdapter implements IDISConsumer {
     }
 
     @Override
-    public void commitAsync(OffsetCommitCallback callback) {
+    public void commitAsync(DisOffsetCommitCallback callback) {
         acquire();
         try {
             commitAsync(subscriptions.allConsumed(), callback);
@@ -220,7 +226,7 @@ public class DISConsumer extends AbstractAdapter implements IDISConsumer {
     }
 
     @Override
-    public void commitAsync(Map<StreamPartition, OffsetAndMetadata> offsets, OffsetCommitCallback callback) {
+    public void commitAsync(Map<StreamPartition, DisOffsetAndMetadata> offsets, DisOffsetCommitCallback callback) {
         acquire();
         try {
             log.debug("Committing offsets: {} ", offsets);
@@ -252,7 +258,7 @@ public class DISConsumer extends AbstractAdapter implements IDISConsumer {
             Collection<StreamPartition> parts = partitions.size() == 0 ? this.subscriptions.assignedPartitions() : partitions;
             for (StreamPartition tp : parts) {
                 log.debug("Seeking to beginning of partition {}", tp);
-                subscriptions.needOffsetReset(tp, OffsetResetStrategy.EARLIEST);
+                subscriptions.needOffsetReset(tp, DisOffsetResetStrategy.EARLIEST);
             }
         } finally {
             release();
@@ -266,7 +272,7 @@ public class DISConsumer extends AbstractAdapter implements IDISConsumer {
             Collection<StreamPartition> parts = partitions.size() == 0 ? this.subscriptions.assignedPartitions() : partitions;
             for (StreamPartition tp : parts) {
                 log.debug("Seeking to end of partition {}", tp);
-                subscriptions.needOffsetReset(tp, OffsetResetStrategy.LATEST);
+                subscriptions.needOffsetReset(tp, DisOffsetResetStrategy.LATEST);
             }
         } finally {
             release();
@@ -295,10 +301,10 @@ public class DISConsumer extends AbstractAdapter implements IDISConsumer {
     }
 
     @Override
-    public OffsetAndMetadata committed(StreamPartition partition) {
+    public DisOffsetAndMetadata committed(StreamPartition partition) {
         acquire();
         try {
-            OffsetAndMetadata committed;
+            DisOffsetAndMetadata committed;
             if (subscriptions.isAssigned(partition)) {
                 committed = this.subscriptions.committed(partition);
                 if (committed == null) {
@@ -306,7 +312,7 @@ public class DISConsumer extends AbstractAdapter implements IDISConsumer {
                     committed = this.subscriptions.committed(partition);
                 }
             } else {
-                Map<StreamPartition, OffsetAndMetadata> offsets = coordinator.fetchCommittedOffsets(Collections.singleton(partition));
+                Map<StreamPartition, DisOffsetAndMetadata> offsets = coordinator.fetchCommittedOffsets(Collections.singleton(partition));
                 committed = offsets.get(partition);
             }
             return committed;
@@ -425,5 +431,107 @@ public class DISConsumer extends AbstractAdapter implements IDISConsumer {
     private void release() {
         if (refcount.decrementAndGet() == 0)
             currentThread.set(NO_CURRENT_THREAD);
+    }
+
+    @Override
+    public Map<StreamPartition, DisOffsetAndTimestamp> offsetsForTimes(Map<StreamPartition, Long> map) {
+        Map<StreamPartition, DisOffsetAndTimestamp> results = new HashMap<>();
+        for(Map.Entry<StreamPartition,Long> entry: map.entrySet())
+        {
+            StreamPartition partition = entry.getKey();
+            long timestamp = entry.getValue();
+            if(timestamp <= 0)
+            {
+                throw new IllegalArgumentException("timestamp must be great than 0, partition " + partition + " timestamp " + timestamp);
+            }
+            GetPartitionCursorRequest getPartitionCursorRequest = new GetPartitionCursorRequest();
+            getPartitionCursorRequest.setCursorType(Constants.AT_TIMESTAMP);
+            getPartitionCursorRequest.setStreamName(partition.stream());
+            getPartitionCursorRequest.setPartitionId(String.valueOf(partition.partition()));
+            getPartitionCursorRequest.setTimestamp(timestamp);
+            GetPartitionCursorResult iterator = disClient.getPartitionCursor(getPartitionCursorRequest);
+            PartitionIterator partitionIterator = Utils.decodeIterator(iterator.getPartitionCursor());
+            results.put(partition,new DisOffsetAndTimestamp(Long.valueOf(partitionIterator.getGetIteratorParam().getStartingSequenceNumber()),timestamp));
+        }
+        return results;
+    }
+
+    private Map<StreamPartition, Long> offsets(Collection<StreamPartition> collection, boolean beginningOrEnd) {
+        Map<String, List<Integer>> describeTopic = new HashMap<>();
+        Map<StreamPartition, Long> results = new HashMap<>();
+        for (StreamPartition streamPartition : collection) {
+            if (describeTopic.get(streamPartition.stream()) == null) {
+                describeTopic.putIfAbsent(streamPartition.stream(), new ArrayList<>());
+            }
+            describeTopic.get(streamPartition.stream()).add(streamPartition.partition());
+        }
+        for (Map.Entry<String, List<Integer>> entry : describeTopic.entrySet()) {
+            List<Integer> parts = entry.getValue();
+            parts.sort(new Comparator<Integer>() {
+                @Override
+                public int compare(Integer o1, Integer o2) {
+                    return Integer.compare(o1, o2);
+                }
+            });
+            int index = 0;
+            while (index < parts.size()) {
+                final int LIMIT = 100;
+                String partitionId = parts.get(index) == 0 ? "" : Utils.getShardIdStringFromPartitionId(parts.get(index) - 1);
+                DescribeStreamRequest describeStreamRequest = new DescribeStreamRequest();
+                describeStreamRequest.setStreamName(entry.getKey());
+                describeStreamRequest.setLimitPartitions(LIMIT);
+                describeStreamRequest.setStartPartitionId(partitionId);
+                DescribeStreamResult describeStreamResult = disClient.describeStream(describeStreamRequest);
+                for (PartitionResult partitionResult : describeStreamResult.getPartitions()) {
+                    if (Utils.getKafkaPartitionFromPartitionId(partitionResult.getPartitionId()) == parts.get(index)) {
+                        StreamPartition partition = new StreamPartition(entry.getKey(), parts.get(index));
+
+                        String offsetRange = partitionResult.getSequenceNumberRange();
+                        if (offsetRange == null) {
+                            log.error("partition " + partition + " has been expired and is not readable");
+                            throw new PartitionExpiredException("partition " + partition + " has been expired and is not readable");
+                        }
+                        String[] array = offsetRange.trim().substring(1, offsetRange.length() - 1).split(":");
+                        long startOffset = -1;
+                        long endOffset = -1;
+
+                        if (!(array[0] == null || array[0].isEmpty() || array[0].contains("null"))) {
+                            startOffset = Long.valueOf(array[0].trim());
+                            endOffset = Long.valueOf(array[1].trim());
+                        }
+                        if (startOffset == -1 || endOffset == -1) {
+                            throw new IllegalStateException("cannot find offset for " + partition);
+                        }
+                        results.put(partition, beginningOrEnd ? startOffset : endOffset);
+                        index++;
+                        if (index >= parts.size()) {
+                            break;
+                        }
+                    }
+                }
+                if (describeStreamResult.getPartitions().size() < LIMIT) {
+                    break;
+                }
+            }
+            if (index < parts.size()) {
+                String notExist = "";
+                for (; index < parts.size(); index++) {
+                    notExist += parts.get(index) + ",";
+                }
+                new IllegalStateException("some partitions do not exist, topic: "
+                        + entry.getKey() + " partition " + notExist);
+            }
+        }
+        return results;
+    }
+
+    @Override
+    public Map<StreamPartition, Long> beginningOffsets(Collection<StreamPartition> collection) {
+        return offsets(collection,true);
+    }
+
+    @Override
+    public Map<StreamPartition, Long> endOffsets(Collection<StreamPartition> collection) {
+        return offsets(collection,false);
     }
 }

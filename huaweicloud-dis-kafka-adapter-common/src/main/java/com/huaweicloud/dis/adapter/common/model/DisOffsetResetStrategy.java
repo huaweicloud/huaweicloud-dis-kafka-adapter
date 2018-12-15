@@ -16,6 +16,6 @@
 
 package com.huaweicloud.dis.adapter.common.model;
 
-public enum OffsetResetStrategy {
+public enum DisOffsetResetStrategy {
     LATEST, EARLIEST, NONE
 }

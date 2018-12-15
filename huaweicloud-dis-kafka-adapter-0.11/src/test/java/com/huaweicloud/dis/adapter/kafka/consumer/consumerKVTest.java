@@ -16,7 +16,6 @@
 
 package com.huaweicloud.dis.adapter.kafka.consumer;
 
-import com.huaweicloud.dis.adapter.kafka.consumer.DISKafkaConsumer;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.junit.Ignore;

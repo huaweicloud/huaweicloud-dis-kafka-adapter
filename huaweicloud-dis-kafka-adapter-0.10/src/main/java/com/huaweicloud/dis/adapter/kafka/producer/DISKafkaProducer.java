@@ -18,6 +18,7 @@ package com.huaweicloud.dis.adapter.kafka.producer;
 
 import com.huaweicloud.dis.DISConfig;
 import com.huaweicloud.dis.adapter.common.Utils;
+import com.huaweicloud.dis.adapter.common.model.DisProducerRecord;
 import com.huaweicloud.dis.adapter.common.producer.DISProducer;
 import com.huaweicloud.dis.adapter.common.producer.IDISProducer;
 import com.huaweicloud.dis.core.util.StringUtils;
@@ -153,7 +154,7 @@ public class DISKafkaProducer<K, V> implements Producer<K, V> {
             key = new String(keySerializer.serialize(stream, k));
         }
 
-        Future<PutRecordsResult> putResultFuture = disProducer.send(new com.huaweicloud.dis.adapter.common.model.ProducerRecord(stream, partition, timestamp, key, value));
+        Future<PutRecordsResult> putResultFuture = disProducer.send(new DisProducerRecord(stream, partition, timestamp, key, value));
         return new RecordMetadataFuture(stream, putResultFuture);
 
     }

@@ -18,16 +18,16 @@ package com.huaweicloud.dis.adapter.common.model;
 
 import java.io.Serializable;
 
-public class OffsetAndMetadata implements Serializable {
+public class DisOffsetAndMetadata implements Serializable {
     private final long offset;
     private final String metadata;
 
-    public OffsetAndMetadata(long offset, String metadata) {
+    public DisOffsetAndMetadata(long offset, String metadata) {
         this.offset = offset;
         this.metadata = metadata;
     }
 
-    public OffsetAndMetadata(long offset) {
+    public DisOffsetAndMetadata(long offset) {
         this(offset, "");
     }
 
@@ -44,7 +44,7 @@ public class OffsetAndMetadata implements Serializable {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
 
-        OffsetAndMetadata that = (OffsetAndMetadata) o;
+        DisOffsetAndMetadata that = (DisOffsetAndMetadata) o;
 
         if (offset != that.offset) return false;
         return metadata == null ? that.metadata == null : metadata.equals(that.metadata);
@@ -60,7 +60,7 @@ public class OffsetAndMetadata implements Serializable {
 
     @Override
     public String toString() {
-        return "OffsetAndMetadata{" +
+        return "DisOffsetAndMetadata{" +
                 "offset=" + offset +
                 ", metadata='" + metadata + '\'' +
                 '}';

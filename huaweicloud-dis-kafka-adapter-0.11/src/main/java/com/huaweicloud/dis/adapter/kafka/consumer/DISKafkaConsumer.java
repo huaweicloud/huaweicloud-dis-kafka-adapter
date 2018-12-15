@@ -19,6 +19,7 @@ package com.huaweicloud.dis.adapter.kafka.consumer;
 import com.huaweicloud.dis.DISConfig;
 import com.huaweicloud.dis.adapter.common.consumer.DISConsumer;
 import com.huaweicloud.dis.adapter.common.consumer.DisConsumerRebalanceListener;
+import com.huaweicloud.dis.adapter.common.consumer.DisOffsetAndTimestamp;
 import com.huaweicloud.dis.adapter.common.consumer.DisOffsetCommitCallback;
 import com.huaweicloud.dis.adapter.common.model.DisOffsetAndMetadata;
 import com.huaweicloud.dis.adapter.common.model.StreamPartition;
@@ -29,6 +30,7 @@ import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.clients.consumer.internals.NoOpConsumerRebalanceListener;
 import org.apache.kafka.common.Metric;
@@ -42,6 +44,7 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.StreamTokenizer;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -50,6 +53,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 
 
@@ -389,7 +393,48 @@ public class DISKafkaConsumer<K, V> implements Consumer<K, V> {
 
     @Override
     public void wakeup() {
-        // TODO Auto-generated method stub
+    }
 
+    @Override
+    public void close(long l, TimeUnit timeUnit) {
+        close();
+    }
+
+    @Override
+    public Map<TopicPartition, OffsetAndTimestamp> offsetsForTimes(Map<TopicPartition, Long> map) {
+        Map<StreamPartition,Long> tmp = new HashMap<>();
+        for(Map.Entry<TopicPartition,Long> entry: map.entrySet())
+        {
+            tmp.put(new StreamPartition(entry.getKey().topic(),entry.getKey().partition()),entry.getValue());
+        }
+        Map<StreamPartition,DisOffsetAndTimestamp> offsets = disConsumer.offsetsForTimes(tmp);
+        Map<TopicPartition, OffsetAndTimestamp> results = new HashMap<>();
+        for(Map.Entry<StreamPartition,DisOffsetAndTimestamp> entry: offsets.entrySet())
+        {
+            results.put(new TopicPartition(entry.getKey().stream(),entry.getKey().partition()),new OffsetAndTimestamp(entry.getValue().offset(),entry.getValue().timestamp()));
+        }
+        return results;
+    }
+
+    @Override
+    public Map<TopicPartition, Long> beginningOffsets(Collection<TopicPartition> collection) {
+        Map<StreamPartition, Long> offsets = disConsumer.beginningOffsets(convertTopicPartition(collection));
+        Map<TopicPartition, Long> results = new HashMap<>();
+        for(Map.Entry<StreamPartition,Long> entry: offsets.entrySet())
+        {
+            results.put(new TopicPartition(entry.getKey().stream(),entry.getKey().partition()),entry.getValue());
+        }
+        return results;
+    }
+
+    @Override
+    public Map<TopicPartition, Long> endOffsets(Collection<TopicPartition> collection) {
+        Map<StreamPartition, Long> offsets = disConsumer.endOffsets(convertTopicPartition(collection));
+        Map<TopicPartition, Long> results = new HashMap<>();
+        for(Map.Entry<StreamPartition,Long> entry: offsets.entrySet())
+        {
+            results.put(new TopicPartition(entry.getKey().stream(),entry.getKey().partition()),entry.getValue());
+        }
+        return results;
     }
 }

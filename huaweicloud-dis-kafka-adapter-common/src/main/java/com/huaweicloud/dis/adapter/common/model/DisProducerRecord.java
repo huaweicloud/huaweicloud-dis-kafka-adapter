@@ -18,7 +18,7 @@ package com.huaweicloud.dis.adapter.common.model;
 
 import java.nio.ByteBuffer;
 
-public final class ProducerRecord {
+public final class DisProducerRecord {
 
     private final String stream;
     private final Integer partition;
@@ -27,7 +27,7 @@ public final class ProducerRecord {
     private final Long timestamp;
 
 
-    public ProducerRecord(String stream, Integer partition, Long timestamp, String key, ByteBuffer value) {
+    public DisProducerRecord(String stream, Integer partition, Long timestamp, String key, ByteBuffer value) {
         if (stream == null)
             throw new IllegalArgumentException("Topic cannot be null");
         if (timestamp != null && timestamp < 0)
@@ -40,17 +40,17 @@ public final class ProducerRecord {
     }
 
 
-    public ProducerRecord(String stream, Integer partition, String key, ByteBuffer value) {
+    public DisProducerRecord(String stream, Integer partition, String key, ByteBuffer value) {
         this(stream, partition, null, key, value);
     }
 
 
-    public ProducerRecord(String stream, String key, ByteBuffer value) {
+    public DisProducerRecord(String stream, String key, ByteBuffer value) {
         this(stream, null, null, key, value);
     }
 
 
-    public ProducerRecord(String stream, ByteBuffer value) {
+    public DisProducerRecord(String stream, ByteBuffer value) {
         this(stream, null, null, null, value);
     }
 
@@ -84,7 +84,7 @@ public final class ProducerRecord {
         String key = this.key == null ? "null" : this.key.toString();
         String value = this.value == null ? "null" : this.value.toString();
         String timestamp = this.timestamp == null ? "null" : this.timestamp.toString();
-        return "ProducerRecord(stream=" + stream + ", partition=" + partition + ", key=" + key + ", value=" + value +
+        return "DisProducerRecord(stream=" + stream + ", partition=" + partition + ", key=" + key + ", value=" + value +
                 ", timestamp=" + timestamp + ")";
     }
 
@@ -92,10 +92,10 @@ public final class ProducerRecord {
     public boolean equals(Object o) {
         if (this == o)
             return true;
-        else if (!(o instanceof ProducerRecord))
+        else if (!(o instanceof DisProducerRecord))
             return false;
 
-        ProducerRecord that = (ProducerRecord) o;
+        DisProducerRecord that = (DisProducerRecord) o;
 
         if (key != null ? !key.equals(that.key) : that.key != null)
             return false;

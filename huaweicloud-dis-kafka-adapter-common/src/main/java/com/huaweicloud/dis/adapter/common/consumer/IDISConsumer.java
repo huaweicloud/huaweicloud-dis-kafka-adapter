@@ -16,7 +16,7 @@
 
 package com.huaweicloud.dis.adapter.common.consumer;
 
-import com.huaweicloud.dis.adapter.common.model.OffsetAndMetadata;
+import com.huaweicloud.dis.adapter.common.model.DisOffsetAndMetadata;
 import com.huaweicloud.dis.adapter.common.model.StreamPartition;
 import com.huaweicloud.dis.iface.data.response.Record;
 import com.huaweicloud.dis.iface.stream.response.DescribeStreamResult;
@@ -37,13 +37,13 @@ public interface IDISConsumer extends Cloneable {
     public void subscribe(Collection<String> topics);
 
 
-    public void subscribe(Collection<String> topics, ConsumerRebalanceListener callback);
+    public void subscribe(Collection<String> topics, DisConsumerRebalanceListener callback);
 
 
     public void assign(Collection<StreamPartition> partitions);
 
 
-    public void subscribe(Pattern pattern, ConsumerRebalanceListener callback);
+    public void subscribe(Pattern pattern, DisConsumerRebalanceListener callback);
 
     public void unsubscribe();
 
@@ -51,13 +51,13 @@ public interface IDISConsumer extends Cloneable {
 
     public void commitSync();
 
-    public void commitSync(Map<StreamPartition, OffsetAndMetadata> offsets);
+    public void commitSync(Map<StreamPartition, DisOffsetAndMetadata> offsets);
 
     public void commitAsync();
 
-    public void commitAsync(OffsetCommitCallback callback);
+    public void commitAsync(DisOffsetCommitCallback callback);
 
-    public void commitAsync(Map<StreamPartition, OffsetAndMetadata> offsets, OffsetCommitCallback callback);
+    public void commitAsync(Map<StreamPartition, DisOffsetAndMetadata> offsets, DisOffsetCommitCallback callback);
 
     public void seek(StreamPartition partition, long offset);
 
@@ -67,7 +67,7 @@ public interface IDISConsumer extends Cloneable {
 
     public long position(StreamPartition partition);
 
-    public OffsetAndMetadata committed(StreamPartition partition);
+    public DisOffsetAndMetadata committed(StreamPartition partition);
 
     public DescribeStreamResult describeStream(String stream);
 
@@ -82,4 +82,10 @@ public interface IDISConsumer extends Cloneable {
     public void close();
 
     public void wakeup();
+
+    public Map<StreamPartition, DisOffsetAndTimestamp> offsetsForTimes(Map<StreamPartition, Long> map);
+
+    public Map<StreamPartition, Long> beginningOffsets(Collection<StreamPartition> collection);
+
+    public Map<StreamPartition, Long> endOffsets(Collection<StreamPartition> collection);
 }

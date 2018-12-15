@@ -16,10 +16,10 @@
 
 package com.huaweicloud.dis.adapter.consumer;
 
-import com.huaweicloud.dis.adapter.common.consumer.ConsumerRebalanceListener;
+import com.huaweicloud.dis.adapter.common.consumer.DisConsumerRebalanceListener;
 import com.huaweicloud.dis.adapter.common.consumer.SubscriptionState;
-import com.huaweicloud.dis.adapter.common.model.OffsetAndMetadata;
-import com.huaweicloud.dis.adapter.common.model.OffsetResetStrategy;
+import com.huaweicloud.dis.adapter.common.model.DisOffsetAndMetadata;
+import com.huaweicloud.dis.adapter.common.model.DisOffsetResetStrategy;
 import com.huaweicloud.dis.adapter.common.model.StreamPartition;
 import org.junit.Assert;
 import org.junit.Test;
@@ -36,12 +36,12 @@ import static org.junit.Assert.assertFalse;
 
 public class SubscriptionStateTest {
 
-    private final SubscriptionState state = new SubscriptionState(OffsetResetStrategy.EARLIEST);
+    private final SubscriptionState state = new SubscriptionState(DisOffsetResetStrategy.EARLIEST);
     private final String topic = "test";
     private final String topic1 = "test1";
     private final StreamPartition tp0 = new StreamPartition("test", 0);
     private final StreamPartition tp1 = new StreamPartition("test", 1);
-    private final MockRebalanceListener rebalanceListener = new MockRebalanceListener();
+    private final MockRebalanceListenerDis rebalanceListener = new MockRebalanceListenerDis();
 
     @Test
     public void partitionAssignment() {
@@ -50,7 +50,7 @@ public class SubscriptionStateTest {
         assertFalse(state.partitionAssignmentNeeded());
         assertFalse(state.hasAllFetchPositions());
         assertTrue(state.refreshCommitsNeeded());
-        state.committed(tp0, new OffsetAndMetadata(1));
+        state.committed(tp0, new DisOffsetAndMetadata(1));
         state.seek(tp0, 1);
         assertTrue(state.isFetchable(tp0));
         assertAllPositions(tp0, 1L);
@@ -85,7 +85,7 @@ public class SubscriptionStateTest {
         assertTrue(state.partitionsAutoAssigned());
         state.assignFromSubscribed(asList(tp0));
         state.seek(tp0, 1);
-        state.committed(tp0, new OffsetAndMetadata(1));
+        state.committed(tp0, new DisOffsetAndMetadata(1));
         assertAllPositions(tp0, 1L);
         state.assignFromSubscribed(asList(tp1));
         assertTrue(state.isAssigned(tp1));
@@ -109,7 +109,7 @@ public class SubscriptionStateTest {
     @Test
     public void commitOffsetMetadata() {
         state.assignFromUser(Arrays.asList(tp0));
-        state.committed(tp0, new OffsetAndMetadata(5, "hi"));
+        state.committed(tp0, new DisOffsetAndMetadata(5, "hi"));
 
         assertEquals(5, state.committed(tp0).offset());
         assertEquals("hi", state.committed(tp0).metadata());
@@ -206,7 +206,7 @@ public class SubscriptionStateTest {
         Assert.assertTrue(state.partitionAssignmentNeeded());
     }
 
-    private static class MockRebalanceListener implements ConsumerRebalanceListener {
+    private static class MockRebalanceListenerDis implements DisConsumerRebalanceListener {
         public Collection<StreamPartition> revoked;
         public Collection<StreamPartition> assigned;
         public int revokedCount = 0;
