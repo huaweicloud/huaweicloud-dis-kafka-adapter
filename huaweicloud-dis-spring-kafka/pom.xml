@@ -19,65 +19,35 @@ under the License.
 	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
 	<modelVersion>4.0.0</modelVersion>
 	<parent>
-		<groupId>com.huaweicloud.dis</groupId>
-		<artifactId>huaweicloud-dis-kafka-adapter</artifactId>
-		<version>1.1.3-SNAPSHOT</version>
-	</parent>
+        <groupId>com.huaweicloud.dis</groupId>
+        <artifactId>huaweicloud-dis-kafka-adapter</artifactId>
+        <version>1.1.3-SNAPSHOT</version>
+    </parent>
 	<groupId>com.huaweicloud.dis</groupId>
-	<artifactId>huaweicloud-dis-kafka-adapter-0.10</artifactId>
+	<artifactId>huaweicloud-dis-spring-kafka</artifactId>
 	<version>1.1.3-SNAPSHOT</version>
 	<packaging>jar</packaging>
 
-	<name>huaweicloud-dis-kafka-adapter-0.10</name>
-	<url>https://www.huaweicloud.com/product/dis.html</url>
-	<description>Huawei Cloud Data Ingestion Service Kafka Adapter</description>
-	<developers>
-		<developer>
-			<id>huaweicloud</id>
-			<organization>Huawei Cloud</organization>
-			<organizationUrl>https://huaweicloud.com</organizationUrl>
-			<roles>
-				<role>developer</role>
-			</roles>
-		</developer>
-	</developers>
+	<name>huaweicloud-dis-spring-kafka</name>
+	<url>http://maven.apache.org</url>
 
     <properties>
-        <huaweicloud-sdk-java-dis.version>1.3.1</huaweicloud-sdk-java-dis.version>
-        
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <maven.compiler.source>1.8</maven.compiler.source>
         <maven.compiler.target>1.8</maven.compiler.target>
     </properties>
     
 	<dependencies>
+        <dependency>
+            <groupId>com.huaweicloud.dis</groupId>
+            <artifactId>huaweicloud-dis-kafka-adapter-0.10</artifactId>
+            <version>${huaweicloud-dis-kafka-adapter.version}</version>
+        </dependency>
 		<dependency>
-			<groupId>com.huaweicloud.dis</groupId>
-			<artifactId>huaweicloud-sdk-java-dis</artifactId>
-			<version>${huaweicloud-sdk-java-dis.version}</version>
+		    <groupId>org.springframework.kafka</groupId>
+		    <artifactId>spring-kafka</artifactId>
+		    <version>1.1.8.RELEASE</version>
 		</dependency>
-
-		<dependency>
-			<groupId>org.apache.kafka</groupId>
-			<artifactId>kafka-clients</artifactId>
-			<version>0.10.0.1</version>
-		</dependency>
-
-		<dependency>
-			<groupId>com.huaweicloud.dis</groupId>
-			<artifactId>huaweicloud-dis-kafka-adapter-common</artifactId>
-			<version>1.1.2-SNAPSHOT</version>
-		</dependency>
-
-
-		<!-- https://mvnrepository.com/artifact/com.googlecode.concurrentlinkedhashmap/concurrentlinkedhashmap-lru -->
-		<dependency>
-			<groupId>com.googlecode.concurrentlinkedhashmap</groupId>
-			<artifactId>concurrentlinkedhashmap-lru</artifactId>
-			<version>1.4.2</version>
-		</dependency>
-
-
 		<dependency>
 			<groupId>junit</groupId>
 			<artifactId>junit</artifactId>
@@ -85,5 +55,25 @@ under the License.
 			<scope>test</scope>
 		</dependency>
 	</dependencies>
-
+	
+	<build>
+		<plugins>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-dependency-plugin</artifactId>
+				<version>2.10</version>
+				<executions>
+					<execution>
+						<phase>package</phase>
+						<goals>
+							<goal>copy-dependencies</goal>
+						</goals>
+					</execution>
+				</executions>
+				<configuration>
+					<includeScope>compile</includeScope>
+				</configuration>
+			</plugin>
+		</plugins>
+	</build>
 </project>

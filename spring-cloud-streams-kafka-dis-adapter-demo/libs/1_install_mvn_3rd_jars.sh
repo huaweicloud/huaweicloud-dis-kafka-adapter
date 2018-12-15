@@ -1,0 +1,1 @@
+mvn install:install-file -Dfile="./spring-cloud-stream-binder-kafka-1.3.1.RELEASE-dis.jar" -DgroupId=org.springframework.cloud -DartifactId=spring-cloud-stream-binder-kafka -Dversion=1.3.1.RELEASE-dis -Dpackaging=jar -DpomFile="./spring-cloud-stream-binder-kafka-1.3.1.RELEASE-dis.pom"
