@@ -24,6 +24,7 @@ import com.huaweicloud.dis.adapter.common.model.DisOffsetAndMetadata;
 import com.huaweicloud.dis.adapter.common.model.DisOffsetResetStrategy;
 import com.huaweicloud.dis.adapter.common.model.PartitionIterator;
 import com.huaweicloud.dis.adapter.common.model.StreamPartition;
+import com.huaweicloud.dis.exception.DISClientException;
 import com.huaweicloud.dis.iface.data.request.GetPartitionCursorRequest;
 import com.huaweicloud.dis.iface.data.response.GetPartitionCursorResult;
 import com.huaweicloud.dis.iface.data.response.Record;
@@ -449,9 +450,17 @@ public class DISConsumer extends AbstractAdapter implements IDISConsumer {
             getPartitionCursorRequest.setStreamName(partition.stream());
             getPartitionCursorRequest.setPartitionId(String.valueOf(partition.partition()));
             getPartitionCursorRequest.setTimestamp(timestamp);
-            GetPartitionCursorResult iterator = disClient.getPartitionCursor(getPartitionCursorRequest);
-            PartitionIterator partitionIterator = Utils.decodeIterator(iterator.getPartitionCursor());
-            results.put(partition,new DisOffsetAndTimestamp(Long.valueOf(partitionIterator.getGetIteratorParam().getStartingSequenceNumber()),timestamp));
+            try {
+                GetPartitionCursorResult iterator = disClient.getPartitionCursor(getPartitionCursorRequest);
+                PartitionIterator partitionIterator = Utils.decodeIterator(iterator.getPartitionCursor());
+                results.put(partition,new DisOffsetAndTimestamp(Long.valueOf(partitionIterator.getGetIteratorParam().getStartingSequenceNumber()),timestamp));
+            }
+            catch (DISClientException e)
+            {
+                log.error("get iterator for " + partition + " error" );
+                throw e;
+            }
+
         }
         return results;
     }

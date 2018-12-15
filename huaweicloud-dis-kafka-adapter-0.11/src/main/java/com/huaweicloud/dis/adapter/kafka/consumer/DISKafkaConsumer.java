@@ -44,7 +44,6 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.StreamTokenizer;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -196,16 +195,14 @@ public class DISKafkaConsumer<K, V> implements Consumer<K, V> {
         disConsumer.subscribe(collection, new DisConsumerRebalanceListener() {
             @Override
             public void onPartitionsRevoked(Collection<StreamPartition> partitions) {
-                if(consumerRebalanceListener != null)
-                {
+                if (consumerRebalanceListener != null) {
                     consumerRebalanceListener.onPartitionsRevoked(convertStreamPartition(partitions));
                 }
             }
 
             @Override
             public void onPartitionsAssigned(Collection<StreamPartition> partitions) {
-                if(consumerRebalanceListener!=null)
-                {
+                if (consumerRebalanceListener != null) {
                     consumerRebalanceListener.onPartitionsAssigned(convertStreamPartition(partitions));
                 }
             }
@@ -227,16 +224,14 @@ public class DISKafkaConsumer<K, V> implements Consumer<K, V> {
         disConsumer.subscribe(pattern, new DisConsumerRebalanceListener() {
             @Override
             public void onPartitionsRevoked(Collection<StreamPartition> partitions) {
-                if(consumerRebalanceListener != null)
-                {
+                if (consumerRebalanceListener != null) {
                     consumerRebalanceListener.onPartitionsRevoked(convertStreamPartition(partitions));
                 }
             }
 
             @Override
             public void onPartitionsAssigned(Collection<StreamPartition> partitions) {
-                if(consumerRebalanceListener!=null)
-                {
+                if (consumerRebalanceListener != null) {
                     consumerRebalanceListener.onPartitionsAssigned(convertStreamPartition(partitions));
                 }
             }
@@ -275,7 +270,7 @@ public class DISKafkaConsumer<K, V> implements Consumer<K, V> {
 
     @Override
     public void commitSync(Map<TopicPartition, OffsetAndMetadata> offsets) {
-        commitAsync(offsets,null);
+        commitAsync(offsets, null);
     }
 
     @Override
@@ -295,8 +290,7 @@ public class DISKafkaConsumer<K, V> implements Consumer<K, V> {
                         results.put(new TopicPartition(entry.getKey().stream(), entry.getKey().partition()), new OffsetAndMetadata(entry.getValue().offset(), entry.getValue().metadata()));
                     }
                 }
-                if(offsetCommitCallback != null)
-                {
+                if (offsetCommitCallback != null) {
                     offsetCommitCallback.onComplete(results, exception);
                 }
             }
@@ -319,8 +313,7 @@ public class DISKafkaConsumer<K, V> implements Consumer<K, V> {
                         results.put(new TopicPartition(entry.getKey().stream(), entry.getKey().partition()), new OffsetAndMetadata(entry.getValue().offset(), entry.getValue().metadata()));
                     }
                 }
-                if(offsetCommitCallback != null)
-                {
+                if (offsetCommitCallback != null) {
                     offsetCommitCallback.onComplete(results, exception);
                 }
             }
@@ -329,7 +322,7 @@ public class DISKafkaConsumer<K, V> implements Consumer<K, V> {
 
     @Override
     public void seek(TopicPartition partition, long offset) {
-        disConsumer.seek(new StreamPartition(partition.topic(),partition.partition()),offset);
+        disConsumer.seek(new StreamPartition(partition.topic(), partition.partition()), offset);
     }
 
     @Override
@@ -418,16 +411,14 @@ public class DISKafkaConsumer<K, V> implements Consumer<K, V> {
 
     @Override
     public Map<TopicPartition, OffsetAndTimestamp> offsetsForTimes(Map<TopicPartition, Long> map) {
-        Map<StreamPartition,Long> tmp = new HashMap<>();
-        for(Map.Entry<TopicPartition,Long> entry: map.entrySet())
-        {
-            tmp.put(new StreamPartition(entry.getKey().topic(),entry.getKey().partition()),entry.getValue());
+        Map<StreamPartition, Long> tmp = new HashMap<>();
+        for (Map.Entry<TopicPartition, Long> entry : map.entrySet()) {
+            tmp.put(new StreamPartition(entry.getKey().topic(), entry.getKey().partition()), entry.getValue());
         }
-        Map<StreamPartition,DisOffsetAndTimestamp> offsets = disConsumer.offsetsForTimes(tmp);
+        Map<StreamPartition, DisOffsetAndTimestamp> offsets = disConsumer.offsetsForTimes(tmp);
         Map<TopicPartition, OffsetAndTimestamp> results = new HashMap<>();
-        for(Map.Entry<StreamPartition,DisOffsetAndTimestamp> entry: offsets.entrySet())
-        {
-            results.put(new TopicPartition(entry.getKey().stream(),entry.getKey().partition()),new OffsetAndTimestamp(entry.getValue().offset(),entry.getValue().timestamp()));
+        for (Map.Entry<StreamPartition, DisOffsetAndTimestamp> entry : offsets.entrySet()) {
+            results.put(new TopicPartition(entry.getKey().stream(), entry.getKey().partition()), new OffsetAndTimestamp(entry.getValue().offset(), entry.getValue().timestamp()));
         }
         return results;
     }
@@ -436,9 +427,8 @@ public class DISKafkaConsumer<K, V> implements Consumer<K, V> {
     public Map<TopicPartition, Long> beginningOffsets(Collection<TopicPartition> collection) {
         Map<StreamPartition, Long> offsets = disConsumer.beginningOffsets(convertTopicPartition(collection));
         Map<TopicPartition, Long> results = new HashMap<>();
-        for(Map.Entry<StreamPartition,Long> entry: offsets.entrySet())
-        {
-            results.put(new TopicPartition(entry.getKey().stream(),entry.getKey().partition()),entry.getValue());
+        for (Map.Entry<StreamPartition, Long> entry : offsets.entrySet()) {
+            results.put(new TopicPartition(entry.getKey().stream(), entry.getKey().partition()), entry.getValue());
         }
         return results;
     }
@@ -447,9 +437,8 @@ public class DISKafkaConsumer<K, V> implements Consumer<K, V> {
     public Map<TopicPartition, Long> endOffsets(Collection<TopicPartition> collection) {
         Map<StreamPartition, Long> offsets = disConsumer.endOffsets(convertTopicPartition(collection));
         Map<TopicPartition, Long> results = new HashMap<>();
-        for(Map.Entry<StreamPartition,Long> entry: offsets.entrySet())
-        {
-            results.put(new TopicPartition(entry.getKey().stream(),entry.getKey().partition()),entry.getValue());
+        for (Map.Entry<StreamPartition, Long> entry : offsets.entrySet()) {
+            results.put(new TopicPartition(entry.getKey().stream(), entry.getKey().partition()), entry.getValue());
         }
         return results;
     }

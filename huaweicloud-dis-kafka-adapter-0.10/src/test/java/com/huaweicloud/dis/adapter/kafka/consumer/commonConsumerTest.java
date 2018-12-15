@@ -16,12 +16,8 @@
 
 package com.huaweicloud.dis.adapter.kafka.consumer;
 
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-
-import com.huaweicloud.dis.adapter.kafka.consumer.DISKafkaConsumer;
+import com.huaweicloud.dis.DISConfig;
+import com.huaweicloud.dis.exception.DISClientException;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.PartitionInfo;
@@ -31,12 +27,11 @@ import org.junit.Before;
 import org.junit.Ignore;
 import org.junit.Test;
 
-import com.huaweicloud.dis.DISConfig;
-import com.huaweicloud.dis.exception.DISClientException;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
-/**
- * Created by z00382129 on 2017/11/22.
- */
 @Ignore
 public class commonConsumerTest {
 
@@ -161,13 +156,13 @@ public class commonConsumerTest {
     public void assignTest0() {
         String topic = "zj-ttt";
         int partition = 0;
-        disConsumer.assign(Collections.singleton(new TopicPartition(topic,partition)));
+        disConsumer.assign(Collections.singleton(new TopicPartition(topic, partition)));
         Set<TopicPartition> partitions = disConsumer.assignment();
-        Assert.assertTrue(partitions.contains(new TopicPartition(topic,partition)));
+        Assert.assertTrue(partitions.contains(new TopicPartition(topic, partition)));
     }
 
     @Test
-    public void assignTest1(){
+    public void assignTest1() {
         String topic = "zj-ttt";
         disConsumer.subscribe(Collections.singleton(topic));
         Set<TopicPartition> partitions = disConsumer.assignment();
@@ -175,25 +170,23 @@ public class commonConsumerTest {
     }
 
     @Test
-    public void assignTest2()
-    {
+    public void assignTest2() {
         String topic = "zj-ttt";
         int partition = 0;
-        disConsumer.assign(Collections.singleton(new TopicPartition(topic,partition)));
+        disConsumer.assign(Collections.singleton(new TopicPartition(topic, partition)));
         disConsumer.poll(10000);
         Set<TopicPartition> partitions = disConsumer.assignment();
-        Assert.assertTrue(partitions.contains(new TopicPartition(topic,partition)));
+        Assert.assertTrue(partitions.contains(new TopicPartition(topic, partition)));
     }
 
     @Test
-    public void assignTest3(){
+    public void assignTest3() {
         String topic = "zj-ttt";
         disConsumer.subscribe(Collections.singleton(topic));
         Set<TopicPartition> partitions = disConsumer.assignment();
         try {
             disConsumer.poll(10000);
-        }catch (DISClientException e)
-        {
+        } catch (DISClientException e) {
             e.printStackTrace();
             String ex = e.getMessage();
             Assert.assertTrue(e.getMessage().contains("URL not found."));
@@ -201,14 +194,13 @@ public class commonConsumerTest {
     }
 
     @Test
-    public void assignTest4(){
+    public void assignTest4() {
         String topic = "zj-ttt";
         disConsumer.subscribe(Collections.singleton(topic));
         Set<TopicPartition> partitions = disConsumer.assignment();
         try {
             disConsumer.poll(10000);
-        }catch (DISClientException e)
-        {
+        } catch (DISClientException e) {
             e.printStackTrace();
             String ex = e.getMessage();
             Assert.assertTrue(e.getMessage().contains("URL not found."));
