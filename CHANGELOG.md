@@ -10,3 +10,4 @@
 
 # 1.1.3
 - Features
+  * add common adapter

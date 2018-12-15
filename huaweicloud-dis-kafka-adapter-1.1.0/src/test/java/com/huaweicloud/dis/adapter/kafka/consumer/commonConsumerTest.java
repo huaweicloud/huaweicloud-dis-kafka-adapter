@@ -5,7 +5,7 @@
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -16,13 +16,11 @@
 
 package com.huaweicloud.dis.adapter.kafka.consumer;
 
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-
+import com.huaweicloud.dis.DISConfig;
+import com.huaweicloud.dis.exception.DISClientException;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.junit.Assert;
@@ -30,13 +28,14 @@ import org.junit.Before;
 import org.junit.Ignore;
 import org.junit.Test;
 
-import com.huaweicloud.dis.DISConfig;
-import com.huaweicloud.dis.adapter.kafka.consumer.DISKafkaConsumer;
-import com.huaweicloud.dis.exception.DISClientException;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
-/**
- * Created by z00382129 on 2017/11/22.
- */
+
 @Ignore
 public class commonConsumerTest {
 
@@ -161,13 +160,13 @@ public class commonConsumerTest {
     public void assignTest0() {
         String topic = "zj-ttt";
         int partition = 0;
-        disConsumer.assign(Collections.singleton(new TopicPartition(topic,partition)));
+        disConsumer.assign(Collections.singleton(new TopicPartition(topic, partition)));
         Set<TopicPartition> partitions = disConsumer.assignment();
-        Assert.assertTrue(partitions.contains(new TopicPartition(topic,partition)));
+        Assert.assertTrue(partitions.contains(new TopicPartition(topic, partition)));
     }
 
     @Test
-    public void assignTest1(){
+    public void assignTest1() {
         String topic = "zj-ttt";
         disConsumer.subscribe(Collections.singleton(topic));
         Set<TopicPartition> partitions = disConsumer.assignment();
@@ -175,25 +174,23 @@ public class commonConsumerTest {
     }
 
     @Test
-    public void assignTest2()
-    {
+    public void assignTest2() {
         String topic = "zj-ttt";
         int partition = 0;
-        disConsumer.assign(Collections.singleton(new TopicPartition(topic,partition)));
+        disConsumer.assign(Collections.singleton(new TopicPartition(topic, partition)));
         disConsumer.poll(10000);
         Set<TopicPartition> partitions = disConsumer.assignment();
-        Assert.assertTrue(partitions.contains(new TopicPartition(topic,partition)));
+        Assert.assertTrue(partitions.contains(new TopicPartition(topic, partition)));
     }
 
     @Test
-    public void assignTest3(){
+    public void assignTest3() {
         String topic = "zj-ttt";
         disConsumer.subscribe(Collections.singleton(topic));
         Set<TopicPartition> partitions = disConsumer.assignment();
         try {
             disConsumer.poll(10000);
-        }catch (DISClientException e)
-        {
+        } catch (DISClientException e) {
             e.printStackTrace();
             String ex = e.getMessage();
             Assert.assertTrue(e.getMessage().contains("URL not found."));
@@ -201,18 +198,51 @@ public class commonConsumerTest {
     }
 
     @Test
-    public void assignTest4(){
+    public void assignTest4() {
         String topic = "zj-ttt";
         disConsumer.subscribe(Collections.singleton(topic));
         Set<TopicPartition> partitions = disConsumer.assignment();
         try {
             disConsumer.poll(10000);
-        }catch (DISClientException e)
-        {
+        } catch (DISClientException e) {
             e.printStackTrace();
             String ex = e.getMessage();
             Assert.assertTrue(e.getMessage().contains("URL not found."));
         }
     }
+
+    @Test
+    public void offsetsForTimesTest() {
+        String topic = "zj-ttt";
+        Map<TopicPartition, Long> partitionLongMap = new HashMap<>();
+        for (int i = 0; i < 3; i++) {
+            partitionLongMap.put(new TopicPartition(topic, i), 1549999900000L);
+        }
+        Map<TopicPartition, OffsetAndTimestamp> partitionOffsetAndTimestampMap = disConsumer.offsetsForTimes(partitionLongMap);
+        Assert.assertTrue(partitionOffsetAndTimestampMap.size() == 3);
+    }
+
+    @Test
+    public void beginningOffsetsTest() {
+        String topic = "zj-ttt";
+        Set<TopicPartition> set = new HashSet<>();
+        for (int i = 0; i < 3; i++) {
+            set.add(new TopicPartition(topic, i));
+        }
+        Map<TopicPartition, Long> startOffsets = disConsumer.beginningOffsets(set);
+        Assert.assertTrue(startOffsets.size() == 3);
+    }
+
+    @Test
+    public void endOffsetsTest() {
+        String topic = "zj-ttt";
+        Set<TopicPartition> set = new HashSet<>();
+        for (int i = 0; i < 3; i++) {
+            set.add(new TopicPartition(topic, i));
+        }
+        Map<TopicPartition, Long> endOffsets = disConsumer.endOffsets(set);
+        Assert.assertTrue(endOffsets.size() == 3);
+    }
+
 
 }

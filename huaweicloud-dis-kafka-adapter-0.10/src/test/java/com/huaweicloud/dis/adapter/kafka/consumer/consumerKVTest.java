@@ -5,7 +5,7 @@
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -16,65 +16,56 @@
 
 package com.huaweicloud.dis.adapter.kafka.consumer;
 
+import com.huaweicloud.dis.DISConfig;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.junit.Ignore;
 import org.junit.Test;
 
-import com.huaweicloud.dis.DISConfig;
-import com.huaweicloud.dis.adapter.kafka.consumer.DISKafkaConsumer;
-
-/**
- * Created by z00382129 on 2017/11/24.
- */
 @Ignore
 public class consumerKVTest {
 
     @Test
-    public void KVTest0()
-    {
+    public void KVTest0() {
         DISConfig disConfig = new DISConfig();
-        disConfig.set("key.deserializer","org.apache.kafka.common.serialization.StringDeserializer");
-        disConfig.set("value.deserializer","org.apache.kafka.common.serialization.StringDeserializer");
-        DISKafkaConsumer<String,String> disKafkaConsumer = new DISKafkaConsumer<String, String>(disConfig);
+        disConfig.set("key.deserializer", "org.apache.kafka.common.serialization.StringDeserializer");
+        disConfig.set("value.deserializer", "org.apache.kafka.common.serialization.StringDeserializer");
+        DISKafkaConsumer<String, String> disKafkaConsumer = new DISKafkaConsumer<String, String>(disConfig);
     }
 
     @Test
-    public void KVTest1()
-    {
+    public void KVTest1() {
         DISConfig disConfig = new DISConfig();
-        disConfig.set("key.deserializer","");
-        disConfig.set("value.deserializer","");
+        disConfig.set("key.deserializer", "");
+        disConfig.set("value.deserializer", "");
         ByteArrayDeserializer byteArrayDeserializer = new ByteArrayDeserializer();
-        DISKafkaConsumer<byte[],byte[]> disKafkaConsumer = new DISKafkaConsumer<byte[],byte[]>(disConfig,byteArrayDeserializer,byteArrayDeserializer);
+        DISKafkaConsumer<byte[], byte[]> disKafkaConsumer = new DISKafkaConsumer<byte[], byte[]>(disConfig, byteArrayDeserializer, byteArrayDeserializer);
     }
 
     @Test
-    public void KVTest2()
-    {
+    public void KVTest2() {
         DISConfig disConfig = new DISConfig();
-        disConfig.set("key.deserializer","");
-        disConfig.set("value.deserializer","");
+        disConfig.set("key.deserializer", "");
+        disConfig.set("value.deserializer", "");
         ByteArrayDeserializer byteArrayDeserializer = new ByteArrayDeserializer();
         LongDeserializer longDeserializer = new LongDeserializer();
-        DISKafkaConsumer<Long,byte[]> disKafkaConsumer = new DISKafkaConsumer<Long,byte[]>(disConfig,longDeserializer,byteArrayDeserializer);
+        DISKafkaConsumer<Long, byte[]> disKafkaConsumer = new DISKafkaConsumer<Long, byte[]>(disConfig, longDeserializer, byteArrayDeserializer);
     }
 
     @Test
-    public void KVTest3()
-    {
+    public void KVTest3() {
         DISConfig disConfig = new DISConfig();
-        disConfig.set("key.deserializer","org.apache.kafka.common.serialization.LongDeserializer");
-        disConfig.set("value.deserializer","org.apache.kafka.common.serialization.StringDeserializer");
-        DISKafkaConsumer<String,String> disKafkaConsumer = new DISKafkaConsumer<String, String>(disConfig);
+        disConfig.set("key.deserializer", "org.apache.kafka.common.serialization.LongDeserializer");
+        disConfig.set("value.deserializer", "org.apache.kafka.common.serialization.StringDeserializer");
+        DISKafkaConsumer<String, String> disKafkaConsumer = new DISKafkaConsumer<String, String>(disConfig);
     }
+
     @Test
-    public void KVTest4()
-    {
+    public void KVTest4() {
         DISConfig disConfig = new DISConfig();
-        disConfig.set("key.deserializer","org.apache.kafka.common.serialization.StringDeserializer");
-        disConfig.set("value.deserializer","org.apache.kafka.common.serialization.IntegerDeserializer");
-        DISKafkaConsumer<String,String> disKafkaConsumer = new DISKafkaConsumer<String, String>(disConfig);
+        disConfig.set("key.deserializer", "org.apache.kafka.common.serialization.StringDeserializer");
+        disConfig.set("value.deserializer", "org.apache.kafka.common.serialization.IntegerDeserializer");
+        DISKafkaConsumer<String, String> disKafkaConsumer = new DISKafkaConsumer<String, String>(disConfig);
     }
 
 
