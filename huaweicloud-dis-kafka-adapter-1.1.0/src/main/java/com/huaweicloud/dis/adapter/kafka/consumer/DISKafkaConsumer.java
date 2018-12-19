@@ -402,6 +402,7 @@ public class DISKafkaConsumer<K, V> implements Consumer<K, V> {
 
     @Override
     public void wakeup() {
+        disConsumer.wakeup();
     }
 
     @Override

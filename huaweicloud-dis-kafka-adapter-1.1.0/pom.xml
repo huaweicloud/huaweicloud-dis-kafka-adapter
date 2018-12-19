@@ -23,9 +23,7 @@ under the License.
         <artifactId>huaweicloud-dis-kafka-adapter</artifactId>
         <version>1.1.3-SNAPSHOT</version>
     </parent>
-    <groupId>com.huaweicloud.dis</groupId>
     <artifactId>huaweicloud-dis-kafka-adapter-1.1.0</artifactId>
-    <version>1.1.3-SNAPSHOT</version>
     <packaging>jar</packaging>
 
     <name>huaweicloud-dis-kafka-adapter-1.1.0</name>
@@ -43,8 +41,6 @@ under the License.
     </developers>
 
     <properties>
-        <huaweicloud-sdk-java-dis.version>1.3.1</huaweicloud-sdk-java-dis.version>
-
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <maven.compiler.source>1.8</maven.compiler.source>
         <maven.compiler.target>1.8</maven.compiler.target>
@@ -54,7 +50,11 @@ under the License.
         <dependency>
             <groupId>com.huaweicloud.dis</groupId>
             <artifactId>huaweicloud-sdk-java-dis</artifactId>
-            <version>${huaweicloud-sdk-java-dis.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>com.huaweicloud.dis</groupId>
+            <artifactId>huaweicloud-dis-kafka-adapter-common</artifactId>
         </dependency>
 
         <dependency>
@@ -66,14 +66,7 @@ under the License.
         <dependency>
             <groupId>junit</groupId>
             <artifactId>junit</artifactId>
-            <version>4.11</version>
             <scope>test</scope>
-        </dependency>
-
-        <dependency>
-            <groupId>com.huaweicloud.dis</groupId>
-            <artifactId>huaweicloud-dis-kafka-adapter-common</artifactId>
-            <version>1.1.3-SNAPSHOT</version>
         </dependency>
     </dependencies>
 

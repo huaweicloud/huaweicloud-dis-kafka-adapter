@@ -36,17 +36,7 @@ import com.huaweicloud.dis.iface.stream.response.PartitionResult;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.ConcurrentModificationException;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.UUID;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -56,6 +46,11 @@ import java.util.regex.Pattern;
 public class DISConsumer extends AbstractAdapter implements IDISConsumer {
     private static final Logger log = LoggerFactory.getLogger(DISConsumer.class);
     private static final long NO_CURRENT_THREAD = -1L;
+
+    public static final String KEY_MAX_PARTITION_FETCH_RECORDS = "max.partition.fetch.records";
+
+    public static final String KEY_MAX_FETCH_THREADS = "max.fetch.threads";
+
     private Coordinator coordinator;
     private SubscriptionState subscriptions;
     private boolean closed = false;
@@ -80,7 +75,8 @@ public class DISConsumer extends AbstractAdapter implements IDISConsumer {
         this.nextIterators = new ConcurrentHashMap<>();
         boolean autoCommitEnabled = disConfig.getBoolean("enable.auto.commit", true);
         long autoCommitIntervalMs = Long.valueOf(disConfig.get("auto.commit.interval.ms", "5000"));
-        this.coordinator = new Coordinator(this.disClient,
+
+        this.coordinator = new Coordinator(this.disAsync,
                 this.clientId,
                 this.groupId,
                 this.subscriptions,
@@ -88,7 +84,8 @@ public class DISConsumer extends AbstractAdapter implements IDISConsumer {
                 autoCommitIntervalMs,
                 this.nextIterators,
                 disConfig);
-        this.fetcher = new Fetcher(disConfig,
+        this.fetcher = new Fetcher(this.disAsync,
+                disConfig.getInt(DISConsumer.KEY_MAX_PARTITION_FETCH_RECORDS, 1000),
                 this.subscriptions,
                 this.coordinator,
                 this.nextIterators);
@@ -329,7 +326,7 @@ public class DISConsumer extends AbstractAdapter implements IDISConsumer {
             DescribeStreamRequest describeStreamRequest = new DescribeStreamRequest();
             describeStreamRequest.setStreamName(stream);
             describeStreamRequest.setLimitPartitions(1);
-            DescribeStreamResult describeStreamResult = disClient.describeStream(describeStreamRequest);
+            DescribeStreamResult describeStreamResult = disAsync.describeStream(describeStreamRequest);
             return describeStreamResult;
         } finally {
             release();
@@ -347,7 +344,7 @@ public class DISConsumer extends AbstractAdapter implements IDISConsumer {
                 ListStreamsRequest listStreamsRequest = new ListStreamsRequest();
                 listStreamsRequest.setLimit(limit);
                 listStreamsRequest.setExclusivetartStreamName(startStreamName);
-                ListStreamsResult listStreamsResult = disClient.listStreams(listStreamsRequest);
+                ListStreamsResult listStreamsResult = disAsync.listStreams(listStreamsRequest);
                 if (listStreamsResult == null || listStreamsResult.getStreamNames() == null) {
                     break;
                 }
@@ -407,13 +404,13 @@ public class DISConsumer extends AbstractAdapter implements IDISConsumer {
     @Override
     public void close() {
         closed = true;
+        super.close();
     }
 
 
     @Override
     public void wakeup() {
-        // TODO Auto-generated method stub
-
+        fetcher.wakeup();
     }
 
     private void acquire() {
@@ -451,7 +448,7 @@ public class DISConsumer extends AbstractAdapter implements IDISConsumer {
             getPartitionCursorRequest.setPartitionId(String.valueOf(partition.partition()));
             getPartitionCursorRequest.setTimestamp(timestamp);
             try {
-                GetPartitionCursorResult iterator = disClient.getPartitionCursor(getPartitionCursorRequest);
+                GetPartitionCursorResult iterator = disAsync.getPartitionCursor(getPartitionCursorRequest);
                 PartitionIterator partitionIterator = Utils.decodeIterator(iterator.getPartitionCursor());
                 results.put(partition,new DisOffsetAndTimestamp(Long.valueOf(partitionIterator.getGetIteratorParam().getStartingSequenceNumber()),timestamp));
             }
@@ -490,7 +487,7 @@ public class DISConsumer extends AbstractAdapter implements IDISConsumer {
                 describeStreamRequest.setStreamName(entry.getKey());
                 describeStreamRequest.setLimitPartitions(LIMIT);
                 describeStreamRequest.setStartPartitionId(partitionId);
-                DescribeStreamResult describeStreamResult = disClient.describeStream(describeStreamRequest);
+                DescribeStreamResult describeStreamResult = disAsync.describeStream(describeStreamRequest);
                 for (PartitionResult partitionResult : describeStreamResult.getPartitions()) {
                     if (Utils.getKafkaPartitionFromPartitionId(partitionResult.getPartitionId()) == parts.get(index)) {
                         StreamPartition partition = new StreamPartition(entry.getKey(), parts.get(index));
@@ -542,5 +539,10 @@ public class DISConsumer extends AbstractAdapter implements IDISConsumer {
     @Override
     public Map<StreamPartition, Long> endOffsets(Collection<StreamPartition> collection) {
         return offsets(collection,false);
+    }
+
+    @Override
+    protected int getThreadPoolSize() {
+        return config.getInt(KEY_MAX_FETCH_THREADS, 50);
     }
 }

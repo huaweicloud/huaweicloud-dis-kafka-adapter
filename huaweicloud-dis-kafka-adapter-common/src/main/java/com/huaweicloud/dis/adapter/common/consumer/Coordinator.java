@@ -73,8 +73,6 @@ public class Coordinator {
 
     private static final long DEFAULT_GENERATION = -1L;
 
-    private DISClient disClient;
-
     private InnerDisClient innerDISClient;
 
     private DISAsync disAsync;
@@ -100,7 +98,7 @@ public class Coordinator {
     private HeartbeatDelayedRequest heartbeatDelayedRequest;
 
 
-    public Coordinator(DISClient disClient,
+    public Coordinator(DISAsync disAsync,
                        String clientId,
                        String groupId,
                        SubscriptionState subscriptions,
@@ -108,7 +106,7 @@ public class Coordinator {
                        long autoCommitIntervalMs,
                        ConcurrentHashMap<StreamPartition, PartitionCursor> nextIterators,
                        DISConfig disConfig) {
-        this.disClient = disClient;
+        this.disAsync = disAsync;
         this.innerDISClient = new InnerDisClient(disConfig);
         this.state = ClientState.INIT;
         this.clintId = clientId;
@@ -124,7 +122,6 @@ public class Coordinator {
         if (this.autoCommitEnabled) {
             delayedTasks.add(new AutoCommitTask(3000L, autoCommitIntervalMs));
         }
-        this.disAsync = new DISClientAsync(disConfig, Executors.newFixedThreadPool(20));
     }
 
     public boolean isStable() {
@@ -450,7 +447,7 @@ public class Coordinator {
                 describeStreamRequest.setStreamName(entry.getKey());
                 describeStreamRequest.setLimitPartitions(100);
                 describeStreamRequest.setStartPartitionId(partitionId);
-                DescribeStreamResult describeStreamResult = disClient.describeStream(describeStreamRequest);
+                DescribeStreamResult describeStreamResult = disAsync.describeStream(describeStreamRequest);
                 for (PartitionResult partitionResult : describeStreamResult.getPartitions()) {
                     if (Utils.getKafkaPartitionFromPartitionId(partitionResult.getPartitionId()) == parts.get(index)) {
                         StreamPartition partition = new StreamPartition(entry.getKey(), parts.get(index));
@@ -523,7 +520,7 @@ public class Coordinator {
         describeStreamRequest.setStreamName(partition.stream());
         describeStreamRequest.setLimitPartitions(1);
         describeStreamRequest.setStartPartitionId(partitionId);
-        DescribeStreamResult describeStreamResult = disClient.describeStream(describeStreamRequest);
+        DescribeStreamResult describeStreamResult = disAsync.describeStream(describeStreamRequest);
         String offsetRange = describeStreamResult.getPartitions().get(0).getSequenceNumberRange();
         long offset = -1;
         if (offsetRange == null) {

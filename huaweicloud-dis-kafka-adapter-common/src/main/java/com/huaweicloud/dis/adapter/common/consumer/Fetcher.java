@@ -17,8 +17,6 @@
 package com.huaweicloud.dis.adapter.common.consumer;
 
 import com.huaweicloud.dis.DISAsync;
-import com.huaweicloud.dis.DISClientAsync;
-import com.huaweicloud.dis.DISConfig;
 import com.huaweicloud.dis.adapter.common.model.StreamPartition;
 import com.huaweicloud.dis.core.handler.AsyncHandler;
 import com.huaweicloud.dis.iface.data.request.GetRecordsRequest;
@@ -27,16 +25,10 @@ import com.huaweicloud.dis.iface.data.response.Record;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -57,31 +49,20 @@ public class Fetcher {
 
     private Coordinator coordinator;
 
-    private int defaultMaxPartitionFetchRecords = 1000;
+    private int maxPartitionFetchRecords;
 
-    private int defaultMaxFetchThreads = 100;
+    private volatile boolean forceWakeup = false;
 
-    public static final String KEY_MAX_PARTITION_FETCH_RECORDS = "max.partition.fetch.records";
-
-    public static final String KEY_MAX_FETCH_THREADS = "max.fetch.threads";
-
-    public Fetcher(DISConfig disConfig, SubscriptionState subscriptions, Coordinator coordinator, ConcurrentHashMap<StreamPartition, PartitionCursor> nextIterators) {
-        if (disConfig.get(KEY_MAX_PARTITION_FETCH_RECORDS) != null) {
-            defaultMaxPartitionFetchRecords = Integer.valueOf(disConfig.get(KEY_MAX_PARTITION_FETCH_RECORDS).toString());
-        }
-
-        if (disConfig.get(KEY_MAX_FETCH_THREADS) != null) {
-            defaultMaxFetchThreads = Integer.valueOf(disConfig.get(KEY_MAX_FETCH_THREADS).toString());
-        }
-
+    public Fetcher(DISAsync disAsync, int maxPartitionFetchRecords, SubscriptionState subscriptions,
+                   Coordinator coordinator, ConcurrentHashMap<StreamPartition, PartitionCursor> nextIterators) {
+        this.maxPartitionFetchRecords = maxPartitionFetchRecords;
         this.subscriptions = subscriptions;
         this.coordinator = coordinator;
         receivedCnt = new AtomicInteger(0);
         this.nextIterators = nextIterators;
         this.futures = new HashMap<>();
-        this.disAsync = new DISClientAsync(disConfig, Executors.newFixedThreadPool(defaultMaxFetchThreads));
+        this.disAsync = disAsync;
     }
-
 
     public void sendFetchRequests() {
         if (!subscriptions.hasAllFetchPositions()) {
@@ -113,7 +94,7 @@ public class Fetcher {
                 continue;
             }
             getRecordsParam.setPartitionCursor(nextIterators.get(partition).getNextPartitionCursor());
-            getRecordsParam.setLimit(defaultMaxPartitionFetchRecords);
+            getRecordsParam.setLimit(maxPartitionFetchRecords);
             if (futures.get(partition) == null) {
                 futures.put(partition, disAsync.getRecordsAsync(getRecordsParam, new AsyncHandler<GetRecordsResult>() {
                     @Override
@@ -138,13 +119,16 @@ public class Fetcher {
     public Map<StreamPartition, List<Record>> fetchRecords(long timeout) {
         Map<StreamPartition, List<Record>> multipleRecords = new HashMap<>();
         long now = System.currentTimeMillis();
-        while (System.currentTimeMillis() - now <= timeout && receivedCnt.get() == 0) {
+        forceWakeup = false;
+        while (System.currentTimeMillis() - now <= timeout && receivedCnt.get() == 0 && !forceWakeup) {
             try {
                 Thread.sleep(5);
             } catch (InterruptedException e) {
                 log.error(e.getMessage(), e);
             }
         }
+        forceWakeup = false;
+
         if (receivedCnt.get() > 0) {
             for (StreamPartition partition : subscriptions.fetchablePartitions()) {
                 if (futures.get(partition) != null && futures.get(partition).isDone()) {
@@ -173,5 +157,9 @@ public class Fetcher {
     public void pause(StreamPartition partition) {
         futures.remove(partition);
         nextIterators.remove(partition);
+    }
+
+    public void wakeup() {
+        this.forceWakeup = true;
     }
 }

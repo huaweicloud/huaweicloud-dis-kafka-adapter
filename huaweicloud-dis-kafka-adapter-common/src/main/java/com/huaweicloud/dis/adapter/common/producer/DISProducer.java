@@ -43,7 +43,7 @@ public class DISProducer extends AbstractAdapter implements IDISProducer {
 
     public DISProducer(DISConfig disConfig) {
         super(disConfig);
-        producer = new com.huaweicloud.dis.producer.DISProducer(config);
+        producer = new com.huaweicloud.dis.producer.DISProducer(config, this.disAsync);
     }
 
 
@@ -107,8 +107,7 @@ public class DISProducer extends AbstractAdapter implements IDISProducer {
         DescribeStreamRequest describeStreamRequest = new DescribeStreamRequest();
         describeStreamRequest.setStreamName(stream);
         describeStreamRequest.setLimitPartitions(1);
-        DescribeStreamResult describeStreamResult = disClient.describeStream(describeStreamRequest);
-        return describeStreamResult;
+        return this.disAsync.describeStream(describeStreamRequest);
     }
 
     @Override
@@ -121,4 +120,8 @@ public class DISProducer extends AbstractAdapter implements IDISProducer {
         this.producer.close();
     }
 
+    @Override
+    protected int getThreadPoolSize() {
+        return this.config.getMaxInFlightRequestsPerConnection();
+    }
 }

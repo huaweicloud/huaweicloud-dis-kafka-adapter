@@ -399,7 +399,6 @@ public class DISKafkaConsumer<K, V> implements Consumer<K, V> {
 
     @Override
     public void wakeup() {
-        // TODO Auto-generated method stub
-
+        disConsumer.wakeup();
     }
 }
