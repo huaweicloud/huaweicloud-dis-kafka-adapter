@@ -175,14 +175,12 @@ public class DISConsumer extends AbstractAdapter implements IDISConsumer {
             if (timeout < 0)
                 throw new IllegalArgumentException("Timeout must not be negative");
 
+            coordinator.executeDelayedTask();
             if (subscriptions.partitionsAutoAssigned()) {
                 coordinator.ensureGroupStable();
             }
-
             fetcher.sendFetchRequests();
-            Map<StreamPartition, List<Record>> records = fetcher.fetchRecords(timeout);
-            coordinator.executeDelayedTask();
-            return records;
+            return fetcher.fetchRecords(timeout);
         } finally {
             release();
         }

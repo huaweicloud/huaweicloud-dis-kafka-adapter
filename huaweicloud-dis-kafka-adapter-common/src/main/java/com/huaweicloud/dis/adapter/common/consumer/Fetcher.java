@@ -60,7 +60,7 @@ public class Fetcher {
         this.coordinator = coordinator;
         receivedCnt = new AtomicInteger(0);
         this.nextIterators = nextIterators;
-        this.futures = new HashMap<>();
+        this.futures = new ConcurrentHashMap<>();
         this.disAsync = disAsync;
     }
 
@@ -127,27 +127,35 @@ public class Fetcher {
                 log.error(e.getMessage(), e);
             }
         }
-        forceWakeup = false;
 
         if (receivedCnt.get() > 0) {
-            for (StreamPartition partition : subscriptions.fetchablePartitions()) {
-                if (futures.get(partition) != null && futures.get(partition).isDone()) {
-                    try {
-                        GetRecordsResult getRecordsResult = futures.get(partition).get();
-                        List<Record> records = getRecordsResult.getRecords();
-                        multipleRecords.putIfAbsent(partition, new ArrayList<>());
-                        multipleRecords.get(partition).addAll(records);
-                        nextIterators.put(partition, new PartitionCursor(getRecordsResult.getNextPartitionCursor()));
-                        if (!records.isEmpty()) {
-                            subscriptions.seek(partition,
-                                    Long.valueOf(records.get(records.size() - 1).getSequenceNumber()) + 1L);
+            Iterator<StreamPartition> futuresIt = futures.keySet().iterator();
+            while (futuresIt.hasNext()) {
+                StreamPartition partition = futuresIt.next();
+                if (subscriptions.isAssigned(partition) && !subscriptions.isPaused(partition)) {
+                    Future<GetRecordsResult> getRecordsResultFuture = futures.get(partition);
+                    if (getRecordsResultFuture != null && getRecordsResultFuture.isDone()) {
+                        try {
+                            GetRecordsResult getRecordsResult = getRecordsResultFuture.get();
+                            List<Record> records = getRecordsResult.getRecords();
+                            multipleRecords.putIfAbsent(partition, new ArrayList<>());
+                            multipleRecords.get(partition).addAll(records);
+                            nextIterators.put(partition, new PartitionCursor(getRecordsResult.getNextPartitionCursor()));
+                            if (!records.isEmpty()) {
+                                subscriptions.seek(partition,
+                                        Long.valueOf(records.get(records.size() - 1).getSequenceNumber()) + 1L);
+                            }
+                        } catch (InterruptedException | ExecutionException e) {
+                            log.error(e.getMessage(), e);
+                        } finally {
+                            futures.remove(partition);
+                            receivedCnt.decrementAndGet();
                         }
-                    } catch (InterruptedException | ExecutionException e) {
-                        log.error(e.getMessage(), e);
-                    } finally {
-                        futures.remove(partition);
-                        receivedCnt.decrementAndGet();
                     }
+                } else {
+                    receivedCnt.decrementAndGet();
+                    futures.remove(partition);
+                    nextIterators.remove(partition);
                 }
             }
         }
