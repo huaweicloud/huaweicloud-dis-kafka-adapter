@@ -19,6 +19,7 @@ package com.huaweicloud.dis.adapter.kafka.producer;
 import com.huaweicloud.dis.DISConfig;
 import com.huaweicloud.dis.adapter.common.Utils;
 import com.huaweicloud.dis.adapter.common.model.DisProducerRecord;
+import com.huaweicloud.dis.adapter.common.model.ProduceCallback;
 import com.huaweicloud.dis.adapter.common.producer.DISProducer;
 import com.huaweicloud.dis.adapter.common.producer.IDISProducer;
 import com.huaweicloud.dis.core.util.StringUtils;
@@ -29,11 +30,7 @@ import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
-import org.apache.kafka.common.Metric;
-import org.apache.kafka.common.MetricName;
-import org.apache.kafka.common.Node;
-import org.apache.kafka.common.PartitionInfo;
-import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.*;
 import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringSerializer;
@@ -154,7 +151,18 @@ public class DISKafkaProducer<K, V> implements Producer<K, V> {
             key = new String(keySerializer.serialize(stream, k));
         }
 
-        Future<PutRecordsResult> putResultFuture = disProducer.send(new DisProducerRecord(stream, partition, timestamp, key, value));
+        ProduceCallback produceCallback = null;
+        if (callback != null) {
+            produceCallback = new ProduceCallback() {
+                @Override
+                public void onCompletion(PutRecordsResult result, Exception exception) {
+                    RecordMetadata recordMetadata = buildRecordMetadata(stream, result);
+                    callback.onCompletion(recordMetadata, exception);
+                }
+            };
+        }
+        Future<PutRecordsResult> putResultFuture =
+                disProducer.send(new DisProducerRecord(stream, partition, timestamp, key, value), produceCallback);
         return new RecordMetadataFuture(stream, putResultFuture);
 
     }

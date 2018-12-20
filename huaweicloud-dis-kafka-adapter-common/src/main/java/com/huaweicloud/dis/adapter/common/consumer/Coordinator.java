@@ -17,8 +17,6 @@
 package com.huaweicloud.dis.adapter.common.consumer;
 
 import com.huaweicloud.dis.DISAsync;
-import com.huaweicloud.dis.DISClient;
-import com.huaweicloud.dis.DISClientAsync;
 import com.huaweicloud.dis.DISConfig;
 import com.huaweicloud.dis.adapter.common.Constants;
 import com.huaweicloud.dis.adapter.common.Utils;
@@ -49,20 +47,10 @@ import com.huaweicloud.dis.util.JsonUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.DelayQueue;
-import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -72,8 +60,6 @@ public class Coordinator {
     private static final Logger log = LoggerFactory.getLogger(Coordinator.class);
 
     private static final long DEFAULT_GENERATION = -1L;
-
-    private DISClient disClient;
 
     private InnerDisClient innerDISClient;
 
@@ -99,8 +85,7 @@ public class Coordinator {
 
     private HeartbeatDelayedRequest heartbeatDelayedRequest;
 
-
-    public Coordinator(DISClient disClient,
+    public Coordinator(DISAsync disAsync,
                        String clientId,
                        String groupId,
                        SubscriptionState subscriptions,
@@ -108,7 +93,7 @@ public class Coordinator {
                        long autoCommitIntervalMs,
                        ConcurrentHashMap<StreamPartition, PartitionCursor> nextIterators,
                        DISConfig disConfig) {
-        this.disClient = disClient;
+        this.disAsync = disAsync;
         this.innerDISClient = new InnerDisClient(disConfig);
         this.state = ClientState.INIT;
         this.clintId = clientId;
@@ -124,7 +109,6 @@ public class Coordinator {
         if (this.autoCommitEnabled) {
             delayedTasks.add(new AutoCommitTask(3000L, autoCommitIntervalMs));
         }
-        this.disAsync = new DISClientAsync(disConfig, Executors.newFixedThreadPool(20));
     }
 
     public boolean isStable() {
@@ -160,17 +144,22 @@ public class Coordinator {
             heartbeatRequest.setGroupId(groupId);
             heartbeatRequest.setGeneration(generation.get());
             HeartbeatResponse heartbeatResponse = innerDISClient.handleHeartbeatRequest(heartbeatRequest);
+            if(state != ClientState.INIT && heartbeatResponse.getState() != HeartbeatResponse.HeartBeatResponseState.STABLE)
+            {
+                log.info("Heartbeat response [{}] is abnormal", heartbeatResponse.getState());
+            }
             //start rebalance
             if (state == ClientState.STABLE && heartbeatResponse.getState() != HeartbeatResponse.HeartBeatResponseState.STABLE) {
                 subscriptions.listener().onPartitionsRevoked(new HashSet<>(subscriptions.assignedPartitions()));
                 subscriptions.needReassignment();
+                log.info("Start to rejoin group [{}] because of status changes to [{}]", groupId, heartbeatResponse.getState());
             }
             //assignment completed
             if (state == ClientState.SYNCING && heartbeatResponse.getState() == HeartbeatResponse.HeartBeatResponseState.STABLE) {
                 updateSubscriptions(assignment);
                 subscriptions.listener().onPartitionsAssigned(subscriptions.assignedPartitions());
+                log.info("Client [{}] success to join group [{}], subscription {}", clintId, groupId, assignment);
             }
-            log.info("Heartbeat " + JsonUtils.objToJson(heartbeatResponse));
             switch (heartbeatResponse.getState()) {
                 case JOINING:
                     doJoinGroup();
@@ -186,8 +175,8 @@ public class Coordinator {
                     }
                     break;
                 case GROUP_NOT_EXIST:
-                    log.error("{} group not exist", groupId);
-                    throw new IllegalArgumentException("group not exist");
+                    log.error("Group [{}] not exist", groupId);
+                    throw new IllegalArgumentException("Group [" + groupId + "] not exist");
                 default:
                     break;
             }
@@ -239,14 +228,14 @@ public class Coordinator {
             }
             joinGroupRequest.setInterestedStream(interestedStreams);
         }
-        log.info("joinGroupRequest " + JsonUtils.objToJson(joinGroupRequest));
+        log.info("[JOIN] Request to join group [{}]", JsonUtils.objToJson(joinGroupRequest));
         JoinGroupResponse joinGroupResponse = innerDISClient.handleJoinGroupRequest(joinGroupRequest);
-        log.info("joinGroupResponse " + JsonUtils.objToJson(joinGroupResponse));
         switch (joinGroupResponse.getState()) {
             case OK:
                 if (subscriptions.hasPatternSubscription()) {
                     subscriptions.changeSubscription(joinGroupResponse.getSubscription());
                 }
+                log.info("[JOIN] Waiting [{}ms] for other clients to join group [{}]", joinGroupResponse.getSyncDelayedTimeMs(), groupId);
                 try {
                     if (joinGroupResponse.getSyncDelayedTimeMs() > 0) {
                         Thread.sleep(joinGroupResponse.getSyncDelayedTimeMs());
@@ -258,18 +247,22 @@ public class Coordinator {
                 doSyncGroup();
                 break;
             case REJOIN:
+                log.info("[JOIN] Rejoin group [{}]", groupId);
                 doJoinGroup();
                 break;
             case ERR_SUBSCRIPTION:
-                throw new IllegalArgumentException("subscription parameter error");
+                log.error("[JOIN] Failed to join group, stream [{}] may be not exist", joinGroupRequest.getInterestedStream());
+                throw new IllegalArgumentException("Failed to join group, stream ["
+                        + joinGroupRequest.getInterestedStream() + "] may be not exist");
             case GROUP_NOT_EXIST:
-                log.error("{} group not exist", groupId);
-                throw new IllegalArgumentException("group not exist");
+                log.error("[JOIN] Failed to join group, group [{}] not exist", groupId);
+                throw new IllegalArgumentException("Failed to join group, group [" + groupId + "] not exist");
             case ERROR:
-                log.error("joinGroupResponse error");
-                throw new IllegalStateException("joinGroupResponse error");
+                log.error("[JOIN] Failed to join group, joinGroupResponse error [{}]", JsonUtils.objToJson(joinGroupResponse));
+                throw new IllegalStateException("Failed to join group, joinGroupResponse error");
             default:
-                break;
+                log.error("[JOIN] Failed to join group, unknown response [{}]", JsonUtils.objToJson(joinGroupResponse));
+                throw new IllegalStateException("Failed to join group, unknown response");
         }
     }
 
@@ -282,11 +275,11 @@ public class Coordinator {
         syncGroupRequest.setClientId(clintId);
         syncGroupRequest.setGroupId(groupId);
         syncGroupRequest.setGeneration(generation.get());
-        log.info("syncGroup " + JsonUtils.objToJson(syncGroupRequest));
+        log.info("[SYNC] Request to sync group [{}]", JsonUtils.objToJson(syncGroupRequest));
         SyncGroupResponse syncGroupResponse = innerDISClient.handleSyncGroupRequest(syncGroupRequest);
-        log.info("syncGroup " + JsonUtils.objToJson(syncGroupResponse));
         switch (syncGroupResponse.getState()) {
             case OK:
+                log.info("[SYNC] Response for sync group [{}]", JsonUtils.objToJson(syncGroupResponse));
                 assignment = syncGroupResponse.getAssignment();
                 if (assignment == null) {
                     assignment = Collections.emptyMap();
@@ -294,6 +287,7 @@ public class Coordinator {
                 this.generation.set(syncGroupResponse.getGeneration());
                 return;
             case WAITING:
+                log.info("[SYNC] ReSync group [{}]", groupId);
                 try {
                     Thread.sleep(5000L);
                 } catch (InterruptedException e) {
@@ -302,16 +296,18 @@ public class Coordinator {
                 doSyncGroup();
                 break;
             case REJOIN:
+                log.info("[SYNC] Rejoin group [{}]", groupId);
                 doJoinGroup();
                 break;
             case GROUP_NOT_EXIST:
-                log.error("{} group not exist", groupId);
-                throw new IllegalArgumentException("group not exist");
+                log.error("[SYNC] Failed to sync group, group [{}] not exist", groupId);
+                throw new IllegalArgumentException("Failed to sync group, group [" + groupId + "] not exist");
             case ERROR:
-                log.error("syncGroupResponse error");
-                throw new IllegalStateException("syncGroupResponse error");
+                log.error("[SYNC] Failed to sync group, syncGroupResponse error [{}]", JsonUtils.objToJson(syncGroupResponse));
+                throw new IllegalStateException("Failed to sync group, syncGroupResponse error");
             default:
-                break;
+                log.error("[SYNC] Failed to sync group, unknown response [{}]", JsonUtils.objToJson(syncGroupResponse));
+                throw new IllegalStateException("Failed to sync group, unknown response");
         }
     }
 
@@ -450,7 +446,7 @@ public class Coordinator {
                 describeStreamRequest.setStreamName(entry.getKey());
                 describeStreamRequest.setLimitPartitions(100);
                 describeStreamRequest.setStartPartitionId(partitionId);
-                DescribeStreamResult describeStreamResult = disClient.describeStream(describeStreamRequest);
+                DescribeStreamResult describeStreamResult = disAsync.describeStream(describeStreamRequest);
                 for (PartitionResult partitionResult : describeStreamResult.getPartitions()) {
                     if (Utils.getKafkaPartitionFromPartitionId(partitionResult.getPartitionId()) == parts.get(index)) {
                         StreamPartition partition = new StreamPartition(entry.getKey(), parts.get(index));
@@ -523,7 +519,7 @@ public class Coordinator {
         describeStreamRequest.setStreamName(partition.stream());
         describeStreamRequest.setLimitPartitions(1);
         describeStreamRequest.setStartPartitionId(partitionId);
-        DescribeStreamResult describeStreamResult = disClient.describeStream(describeStreamRequest);
+        DescribeStreamResult describeStreamResult = disAsync.describeStream(describeStreamRequest);
         String offsetRange = describeStreamResult.getPartitions().get(0).getSequenceNumberRange();
         long offset = -1;
         if (offsetRange == null) {
@@ -670,6 +666,8 @@ public class Coordinator {
             return true;
         } else {
             while (state != ClientState.STABLE) {
+                // start right now
+                heartbeatDelayedRequest.setStartTimeMs(System.currentTimeMillis());
                 executeDelayedTask();
             }
         }
@@ -692,10 +690,10 @@ public class Coordinator {
                     // app not exist, create
                     innerDISClient.createApp(groupId);
                     log.info("App {} not exist and create successful.", groupId);
-                } catch (DISClientException e1) {
-                    if (e.getMessage() == null || !e.getMessage().contains(Constants.ERROR_CODE_APP_NAME_EXIST)) {
+                } catch (DISClientException createException) {
+                    if (createException.getMessage() == null || !createException.getMessage().contains(Constants.ERROR_CODE_APP_NAME_EXIST)) {
                         log.error("App {} not exist and create failed.", groupId);
-                        throw e;
+                        throw createException;
                     }
                 }
             }

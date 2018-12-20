@@ -127,7 +127,7 @@ public class DISKafkaConsumer<K, V> implements Consumer<K, V> {
                 return;
             }
         }
-        log.info("create DISKafkaConsumer successfully");
+        log.debug("create DISKafkaConsumer successfully");
     }
 
     private static DISConfig newDisConfig(Map map) {
@@ -399,7 +399,6 @@ public class DISKafkaConsumer<K, V> implements Consumer<K, V> {
 
     @Override
     public void wakeup() {
-        // TODO Auto-generated method stub
-
+        disConsumer.wakeup();
     }
 }

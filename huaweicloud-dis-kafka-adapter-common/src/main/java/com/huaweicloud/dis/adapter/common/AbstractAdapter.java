@@ -16,28 +16,26 @@
 
 package com.huaweicloud.dis.adapter.common;
 
-import com.huaweicloud.dis.DISClient;
+import com.huaweicloud.dis.DISClientAsync;
 import com.huaweicloud.dis.DISConfig;
 
 import java.util.Map;
 import java.util.Properties;
+import java.util.concurrent.Executors;
 
 
 public abstract class AbstractAdapter {
 
-    protected DISClient disClient;
-
     protected DISConfig config;
 
+    protected DISClientAsync disAsync;
+
     public AbstractAdapter() {
+
     }
 
     public AbstractAdapter(Map map) {
-        DISConfig disConfig = new DISConfig();
-        disConfig.putAll(map);
-
-        this.config = disConfig;
-        this.disClient = new DISClient(disConfig);
+        this(new DISConfig(){{putAll(map);}});
     }
 
     public AbstractAdapter(Properties properties) {
@@ -46,8 +44,13 @@ public abstract class AbstractAdapter {
 
     public AbstractAdapter(DISConfig disConfig) {
         this.config = disConfig;
-        this.disClient = new DISClient(disConfig);
+        // init DIS async client
+        this.disAsync = new DISClientAsync(disConfig, Executors.newFixedThreadPool(getThreadPoolSize()));
     }
 
+    public void close() {
+        this.disAsync.close();
+    }
 
+    protected abstract int getThreadPoolSize();
 }

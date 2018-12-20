@@ -18,8 +18,8 @@ package com.huaweicloud.dis.adapter.common.producer;
 
 import com.huaweicloud.dis.DISConfig;
 import com.huaweicloud.dis.adapter.common.AbstractAdapter;
-import com.huaweicloud.dis.adapter.common.model.ProduceCallback;
 import com.huaweicloud.dis.adapter.common.model.DisProducerRecord;
+import com.huaweicloud.dis.adapter.common.model.ProduceCallback;
 import com.huaweicloud.dis.core.handler.AsyncHandler;
 import com.huaweicloud.dis.iface.data.request.PutRecordsRequest;
 import com.huaweicloud.dis.iface.data.request.PutRecordsRequestEntry;
@@ -43,7 +43,7 @@ public class DISProducer extends AbstractAdapter implements IDISProducer {
 
     public DISProducer(DISConfig disConfig) {
         super(disConfig);
-        producer = new com.huaweicloud.dis.producer.DISProducer(config);
+        producer = new com.huaweicloud.dis.producer.DISProducer(config, this.disAsync);
     }
 
 
@@ -62,7 +62,9 @@ public class DISProducer extends AbstractAdapter implements IDISProducer {
         List<PutRecordsRequestEntry> recordEntries = new ArrayList<PutRecordsRequestEntry>();
 
         PutRecordsRequestEntry entry = new PutRecordsRequestEntry();
-        entry.setPartitionId(record.partition().toString());
+        if (record.partition() != null) {
+            entry.setPartitionId(record.partition().toString());
+        }
         entry.setPartitionKey(record.key());
         entry.setData(record.value());
         if (record.timestamp() != null) {
@@ -73,23 +75,24 @@ public class DISProducer extends AbstractAdapter implements IDISProducer {
 
         request.setRecords(recordEntries);
 
-        Future<PutRecordsResult> putResultFuture = null;
-        try {
-            putResultFuture = producer.putRecordsAsync(request, new AsyncHandler<PutRecordsResult>() {
+        AsyncHandler<PutRecordsResult> asyncHandler = null;
+        if (callback != null) {
+            asyncHandler = new AsyncHandler<PutRecordsResult>() {
                 @Override
                 public void onSuccess(PutRecordsResult result) {
-                    if (callback != null) {
-                        callback.onCompletion(result, null);
-                    }
+                    callback.onCompletion(result, null);
                 }
 
                 @Override
                 public void onError(Exception exception) {
-                    if (callback != null) {
-                        callback.onCompletion(null, exception);
-                    }
+                    callback.onCompletion(null, exception);
                 }
-            });
+            };
+        }
+
+        Future<PutRecordsResult> putResultFuture = null;
+        try {
+            putResultFuture = producer.putRecordsAsync(request, asyncHandler);
         } catch (InterruptedException e1) {
             throw new RuntimeException(e1);
         }
@@ -107,8 +110,7 @@ public class DISProducer extends AbstractAdapter implements IDISProducer {
         DescribeStreamRequest describeStreamRequest = new DescribeStreamRequest();
         describeStreamRequest.setStreamName(stream);
         describeStreamRequest.setLimitPartitions(1);
-        DescribeStreamResult describeStreamResult = disClient.describeStream(describeStreamRequest);
-        return describeStreamResult;
+        return this.disAsync.describeStream(describeStreamRequest);
     }
 
     @Override
@@ -121,4 +123,8 @@ public class DISProducer extends AbstractAdapter implements IDISProducer {
         this.producer.close();
     }
 
+    @Override
+    protected int getThreadPoolSize() {
+        return this.config.getMaxInFlightRequestsPerConnection();
+    }
 }
