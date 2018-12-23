@@ -24,6 +24,7 @@ import com.huaweicloud.dis.adapter.common.model.ClientState;
 import com.huaweicloud.dis.adapter.common.model.DisOffsetAndMetadata;
 import com.huaweicloud.dis.adapter.common.model.DisOffsetResetStrategy;
 import com.huaweicloud.dis.adapter.common.model.StreamPartition;
+import com.huaweicloud.dis.core.DISCredentials;
 import com.huaweicloud.dis.core.handler.AsyncHandler;
 import com.huaweicloud.dis.core.util.StringUtils;
 import com.huaweicloud.dis.exception.DISClientException;
@@ -52,7 +53,11 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.DelayQueue;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
+
+import static java.lang.Thread.sleep;
 
 
 public class Coordinator {
@@ -83,8 +88,6 @@ public class Coordinator {
 
     private DelayQueue<DelayedTask> delayedTasks;
 
-    private HeartbeatDelayedRequest heartbeatDelayedRequest;
-
     public Coordinator(DISAsync disAsync,
                        String clientId,
                        String groupId,
@@ -102,10 +105,9 @@ public class Coordinator {
         this.autoCommitEnabled = autoCommitEnabled;
         this.subscriptions = subscriptions;
         this.nextIterators = nextIterators;
-        createAppIfNotExist(groupId);
         delayedTasks = new DelayQueue<>();
-        heartbeatDelayedRequest = new HeartbeatDelayedRequest(0L);
-        delayedTasks.add(heartbeatDelayedRequest);
+        delayedTasks.add(new AutoCreateAppTask(0));
+        delayedTasks.add(new HeartbeatDelayedRequest(0L));
         if (this.autoCommitEnabled) {
             delayedTasks.add(new AutoCommitTask(3000L, autoCommitIntervalMs));
         }
@@ -118,27 +120,34 @@ public class Coordinator {
 
     private class HeartbeatDelayedRequest extends DelayedTask {
         private final long nextHeartbeatTimeMs = 10000L;
+        private final boolean isDelayedTask;
 
         public HeartbeatDelayedRequest(long startTimeMs) {
-            super(startTimeMs);
+            this(startTimeMs, true);
         }
 
+        public HeartbeatDelayedRequest(long startTimeMs, boolean isDelayedTask) {
+            super(startTimeMs);
+            this.isDelayedTask = isDelayedTask;
+        }
 
         @Override
         public void doRequest() {
-            if (StringUtils.isNullOrEmpty(groupId)) {
-                log.debug("groupId not defined, can not send heartbeat request");
-                if (subscriptions.partitionsAutoAssigned()) {
-                    log.error("groupId not defined");
-                    throw new IllegalArgumentException("groupId not defined");
-                }
-                return;
-            }
-            setStartTimeMs(System.currentTimeMillis() + nextHeartbeatTimeMs);
-            delayedTasks.add(this);
             if (!subscriptions.partitionsAutoAssigned()) {
+                // no need heartbeat
                 return;
             }
+
+            if (StringUtils.isNullOrEmpty(groupId)) {
+                log.error("groupId not defined");
+                throw new IllegalArgumentException("groupId not defined");
+            }
+
+            if(isDelayedTask) {
+                setStartTimeMs(System.currentTimeMillis() + nextHeartbeatTimeMs);
+                delayedTasks.add(this);
+            }
+
             HeartbeatRequest heartbeatRequest = new HeartbeatRequest();
             heartbeatRequest.setClientId(clintId);
             heartbeatRequest.setGroupId(groupId);
@@ -211,6 +220,39 @@ public class Coordinator {
         }
     }
 
+    /**
+     * Create app if not exist
+     */
+    private class AutoCreateAppTask extends DelayedTask {
+
+        public AutoCreateAppTask(long startTimeMs) {
+            super(startTimeMs);
+        }
+
+        @Override
+        void doRequest() {
+            if (!StringUtils.isNullOrEmpty(groupId)) {
+                try {
+                    disAsync.describeApp(groupId);
+                } catch (DISClientException e) {
+                    if (e.getMessage() == null || !e.getMessage().contains(Constants.ERROR_CODE_APP_NAME_NOT_FOUND)) {
+                        throw e;
+                    }
+                    try {
+                        // app not exist, create
+                        disAsync.createApp(groupId);
+                        log.info("App {} not exist and create successful.", groupId);
+                    } catch (DISClientException createException) {
+                        if (createException.getMessage() == null || !createException.getMessage().contains(Constants.ERROR_CODE_APP_NAME_EXIST)) {
+                            log.error("App {} not exist and create failed.", groupId);
+                            throw createException;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     public void doJoinGroup() {
         if (StringUtils.isNullOrEmpty(groupId)) {
             throw new IllegalStateException("groupId not defined, can not send joinGroup request");
@@ -238,7 +280,7 @@ public class Coordinator {
                 log.info("[JOIN] Waiting [{}ms] for other clients to join group [{}]", joinGroupResponse.getSyncDelayedTimeMs(), groupId);
                 try {
                     if (joinGroupResponse.getSyncDelayedTimeMs() > 0) {
-                        Thread.sleep(joinGroupResponse.getSyncDelayedTimeMs());
+                        sleep(joinGroupResponse.getSyncDelayedTimeMs());
                     }
                 } catch (InterruptedException e) {
                     log.error(e.getMessage());
@@ -289,7 +331,7 @@ public class Coordinator {
             case WAITING:
                 log.info("[SYNC] ReSync group [{}]", groupId);
                 try {
-                    Thread.sleep(5000L);
+                    sleep(5000L);
                 } catch (InterruptedException e) {
                     log.error(e.getMessage());
                 }
@@ -330,6 +372,10 @@ public class Coordinator {
 
 
     public void commitSync(Map<StreamPartition, DisOffsetAndMetadata> offsets) {
+        commit(offsets, null, true);
+    }
+
+    public void commit(Map<StreamPartition, DisOffsetAndMetadata> offsets, DisOffsetCommitCallback callback, boolean isSync) {
         if (StringUtils.isNullOrEmpty(this.groupId)) {
             throw new IllegalStateException("groupId not defined, checkpoint not commit");
         }
@@ -340,6 +386,8 @@ public class Coordinator {
         }
 
         final CountDownLatch countDownLatch = new CountDownLatch(offsets.size());
+        final AtomicReference<Exception> exceptionAtomicReference = new AtomicReference<>();
+        final AtomicBoolean lock = new AtomicBoolean(false);
         for (Map.Entry<StreamPartition, DisOffsetAndMetadata> offset : offsets.entrySet()) {
             CommitCheckpointRequest commitCheckpointRequest = new CommitCheckpointRequest();
             commitCheckpointRequest.setCheckpointType(Constants.CHECKPOINT_LAST_READ);
@@ -352,33 +400,61 @@ public class Coordinator {
                 @Override
                 public void onError(Exception exception) {
                     countDownLatch.countDown();
+                    exceptionAtomicReference.set(exception);
                     log.error(exception.getMessage(), exception);
+
+                    if (callback != null) {
+                        try {
+                            countDownLatch.await();
+                        } catch (InterruptedException ignored) {
+                        }
+
+                        if (lock.compareAndSet(false, true)) {
+                            callback.onComplete(offsets, exceptionAtomicReference.get());
+                        }
+                    }
                 }
 
                 @Override
                 public void onSuccess(CommitCheckpointResult commitCheckpointResult) {
                     countDownLatch.countDown();
+
+                    if (callback != null) {
+                        try {
+                            countDownLatch.await();
+                        } catch (InterruptedException ignored) {
+                        }
+
+                        if (exceptionAtomicReference.get() == null) {
+                            if (lock.compareAndSet(false, true)) {
+                                callback.onComplete(offsets, null);
+                            }
+                        }
+                    }
                 }
             });
         }
-        try {
-            countDownLatch.await();
-        } catch (InterruptedException e) {
-            log.error(e.getMessage(), e);
+
+        if (isSync) {
+            try {
+                countDownLatch.await();
+            } catch (InterruptedException e) {
+                log.error(e.getMessage(), e);
+            }
+
+            Exception e = exceptionAtomicReference.get();
+            if (e != null) {
+                if (e instanceof RuntimeException) {
+                    throw (RuntimeException) e;
+                } else {
+                    throw new RuntimeException(e);
+                }
+            }
         }
     }
 
     public void commitAsync(Map<StreamPartition, DisOffsetAndMetadata> offsets, DisOffsetCommitCallback callback) {
-        try {
-            commitSync(offsets);
-            if (callback != null) {
-                callback.onComplete(offsets, null);
-            }
-        } catch (Exception e) {
-            if (callback != null) {
-                callback.onComplete(offsets, e);
-            }
-        }
+        commit(offsets, callback, false);
     }
 
     public void executeDelayedTask() {
@@ -571,25 +647,41 @@ public class Coordinator {
     }
 
     public Map<StreamPartition, DisOffsetAndMetadata> fetchCommittedOffsets(Set<StreamPartition> partitions) {
-        Map<StreamPartition, DisOffsetAndMetadata> offsets = new HashMap<>();
+        final CountDownLatch countDownLatch = new CountDownLatch(partitions.size());
+        final Map<StreamPartition, DisOffsetAndMetadata> offsets = new HashMap<>();
         for (StreamPartition partition : partitions) {
             GetCheckpointRequest getCheckpointRequest = new GetCheckpointRequest();
             getCheckpointRequest.setStreamName(partition.stream());
             getCheckpointRequest.setAppName(groupId);
             getCheckpointRequest.setCheckpointType(Constants.CHECKPOINT_LAST_READ);
             getCheckpointRequest.setPartitionId(Utils.getShardIdStringFromPartitionId(partition.partition()));
-            GetCheckpointResult getCheckpointResult = innerDISClient.getCheckpoint(getCheckpointRequest);
+            disAsync.getCheckpointAsync(getCheckpointRequest, new AsyncHandler<GetCheckpointResult>() {
+                @Override
+                public void onError(Exception e) {
+                    countDownLatch.countDown();
+                    log.error("Failed to getCheckpoint : {}", e.getMessage(), e);
+                }
 
-            if (getCheckpointResult.getMetadata() == null) {
-                getCheckpointResult.setMetadata("");
-            }
+                @Override
+                public void onSuccess(GetCheckpointResult getCheckpointResult) {
+                    countDownLatch.countDown();
+                    if (getCheckpointResult.getMetadata() == null) {
+                        getCheckpointResult.setMetadata("");
+                    }
 
-            if (!StringUtils.isNullOrEmpty(getCheckpointResult.getSequenceNumber())
-                    && Long.valueOf(getCheckpointResult.getSequenceNumber()) >= 0) {
-                offsets.put(partition,
-                        new DisOffsetAndMetadata(Long.valueOf(getCheckpointResult.getSequenceNumber()),
-                                getCheckpointResult.getMetadata()));
-            }
+                    if (!StringUtils.isNullOrEmpty(getCheckpointResult.getSequenceNumber())
+                            && Long.valueOf(getCheckpointResult.getSequenceNumber()) >= 0) {
+                        offsets.put(partition,
+                                new DisOffsetAndMetadata(Long.valueOf(getCheckpointResult.getSequenceNumber()),
+                                        getCheckpointResult.getMetadata()));
+                    }
+                }
+            });
+        }
+        try {
+            countDownLatch.await();
+        } catch (InterruptedException e) {
+            log.error(e.getMessage(), e);
         }
         return offsets;
     }
@@ -665,10 +757,16 @@ public class Coordinator {
         if (isStable()) {
             return true;
         } else {
+            int loop = 0;
             while (state != ClientState.STABLE) {
                 // start right now
-                heartbeatDelayedRequest.setStartTimeMs(System.currentTimeMillis());
-                executeDelayedTask();
+                new HeartbeatDelayedRequest(0, false).doRequest();
+                if (++loop > 50) {
+                    try {
+                        sleep(50);
+                    } catch (InterruptedException ignored) {
+                    }
+                }
             }
         }
         return true;
@@ -678,25 +776,12 @@ public class Coordinator {
         generation.set(DEFAULT_GENERATION);
     }
 
-    public void createAppIfNotExist(String groupId) {
-        if (!StringUtils.isNullOrEmpty(groupId)) {
-            try {
-                innerDISClient.describeApp(groupId);
-            } catch (DISClientException e) {
-                if (e.getMessage() == null || !e.getMessage().contains(Constants.ERROR_CODE_APP_NAME_NOT_FOUND)) {
-                    throw e;
-                }
-                try {
-                    // app not exist, create
-                    innerDISClient.createApp(groupId);
-                    log.info("App {} not exist and create successful.", groupId);
-                } catch (DISClientException createException) {
-                    if (createException.getMessage() == null || !createException.getMessage().contains(Constants.ERROR_CODE_APP_NAME_EXIST)) {
-                        log.error("App {} not exist and create failed.", groupId);
-                        throw createException;
-                    }
-                }
-            }
-        }
+    /**
+     * Update DIS credentials, such as ak/sk/securityToken
+     *
+     * @param credentials new credentials
+     */
+    public void updateInnerClientCredentials(DISCredentials credentials) {
+        innerDISClient.updateCredentials(credentials);
     }
 }

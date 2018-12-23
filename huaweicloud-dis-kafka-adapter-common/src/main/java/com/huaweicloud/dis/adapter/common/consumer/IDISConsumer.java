@@ -18,6 +18,7 @@ package com.huaweicloud.dis.adapter.common.consumer;
 
 import com.huaweicloud.dis.adapter.common.model.DisOffsetAndMetadata;
 import com.huaweicloud.dis.adapter.common.model.StreamPartition;
+import com.huaweicloud.dis.core.DISCredentials;
 import com.huaweicloud.dis.iface.data.response.Record;
 import com.huaweicloud.dis.iface.stream.response.DescribeStreamResult;
 
@@ -88,4 +89,10 @@ public interface IDISConsumer extends Cloneable {
     public Map<StreamPartition, Long> beginningOffsets(Collection<StreamPartition> collection);
 
     public Map<StreamPartition, Long> endOffsets(Collection<StreamPartition> collection);
+
+    /**
+     * Update DIS credentials, such as ak/sk/securityToken
+     * @param credentials new credentials
+     */
+    void updateCredentials(DISCredentials credentials);
 }

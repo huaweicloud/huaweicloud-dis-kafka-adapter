@@ -18,40 +18,23 @@ package com.huaweicloud.dis.adapter.kafka.consumer;
 
 import com.huaweicloud.dis.DISConfig;
 import com.huaweicloud.dis.adapter.common.consumer.DISConsumer;
-import com.huaweicloud.dis.adapter.common.consumer.DisConsumerRebalanceListener;
+import com.huaweicloud.dis.adapter.common.consumer.DisConsumerConfig;
+import com.huaweicloud.dis.adapter.common.consumer.DisNoOpDisConsumerRebalanceListener;
 import com.huaweicloud.dis.adapter.common.consumer.DisOffsetAndTimestamp;
-import com.huaweicloud.dis.adapter.common.consumer.DisOffsetCommitCallback;
-import com.huaweicloud.dis.adapter.common.model.DisOffsetAndMetadata;
 import com.huaweicloud.dis.adapter.common.model.StreamPartition;
+import com.huaweicloud.dis.adapter.kafka.ConvertUtils;
+import com.huaweicloud.dis.core.DISCredentials;
 import com.huaweicloud.dis.iface.data.response.Record;
 import com.huaweicloud.dis.iface.stream.response.DescribeStreamResult;
-import org.apache.kafka.clients.consumer.Consumer;
-import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
-import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.clients.consumer.ConsumerRecords;
-import org.apache.kafka.clients.consumer.OffsetAndMetadata;
-import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
-import org.apache.kafka.clients.consumer.OffsetCommitCallback;
-import org.apache.kafka.clients.consumer.internals.NoOpConsumerRebalanceListener;
-import org.apache.kafka.common.Metric;
-import org.apache.kafka.common.MetricName;
-import org.apache.kafka.common.Node;
-import org.apache.kafka.common.PartitionInfo;
-import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.clients.consumer.*;
+import org.apache.kafka.common.*;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Properties;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 
@@ -95,7 +78,7 @@ public class DISKafkaConsumer<K, V> implements Consumer<K, V> {
         this.valueDeserializer = valueDeserializer;
         if (keyDeserializer == null) {
             Class keyDeserializerClass = StringDeserializer.class;
-            String className = (String) disConfig.get("key.deserializer");
+            String className = (String) disConfig.get(DisConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG);
             if (className != null) {
                 try {
                     keyDeserializerClass = Class.forName(className);
@@ -114,7 +97,7 @@ public class DISKafkaConsumer<K, V> implements Consumer<K, V> {
 
         if (valueDeserializer == null) {
             Class valueDeserializerClass = StringDeserializer.class;
-            String className = (String) disConfig.get("value.deserializer");
+            String className = (String) disConfig.get(DisConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG);
             if (className != null) {
                 try {
                     valueDeserializerClass = Class.forName(className);
@@ -139,50 +122,9 @@ public class DISKafkaConsumer<K, V> implements Consumer<K, V> {
         return disConfig;
     }
 
-    private static Set<TopicPartition> convertStreamPartition(Set<StreamPartition> streamPartitions) {
-        Set<TopicPartition> partitions = new HashSet<>();
-        if (streamPartitions != null) {
-            for (StreamPartition partition : streamPartitions) {
-                partitions.add(new TopicPartition(partition.stream(), partition.partition()));
-            }
-        }
-        return partitions;
-    }
-
-    private static Collection<TopicPartition> convertStreamPartition(Collection<StreamPartition> streamPartitions) {
-        Collection<TopicPartition> partitions = new HashSet<>();
-        if (streamPartitions != null) {
-            for (StreamPartition partition : streamPartitions) {
-                partitions.add(new TopicPartition(partition.stream(), partition.partition()));
-            }
-        }
-        return partitions;
-    }
-
-    private static Set<StreamPartition> convertTopicPartition(Set<TopicPartition> topicPartitions) {
-        Set<StreamPartition> partitions = new HashSet<>();
-        if (topicPartitions != null) {
-            for (TopicPartition partition : topicPartitions) {
-                partitions.add(new StreamPartition(partition.topic(), partition.partition()));
-            }
-        }
-        return partitions;
-    }
-
-    private static Collection<StreamPartition> convertTopicPartition(Collection<TopicPartition> topicPartitions) {
-        Collection<StreamPartition> partitions = new HashSet<>();
-        if (topicPartitions != null) {
-            for (TopicPartition partition : topicPartitions) {
-                partitions.add(new StreamPartition(partition.topic(), partition.partition()));
-            }
-        }
-        return partitions;
-    }
-
     @Override
     public Set<TopicPartition> assignment() {
-        Set<StreamPartition> streamPartitions = disConsumer.assignment();
-        return convertStreamPartition(streamPartitions);
+        return ConvertUtils.convert2TopicPartitionSet(disConsumer.assignment());
     }
 
     @Override
@@ -192,50 +134,22 @@ public class DISKafkaConsumer<K, V> implements Consumer<K, V> {
 
     @Override
     public void subscribe(Collection<String> collection, ConsumerRebalanceListener consumerRebalanceListener) {
-        disConsumer.subscribe(collection, new DisConsumerRebalanceListener() {
-            @Override
-            public void onPartitionsRevoked(Collection<StreamPartition> partitions) {
-                if (consumerRebalanceListener != null) {
-                    consumerRebalanceListener.onPartitionsRevoked(convertStreamPartition(partitions));
-                }
-            }
-
-            @Override
-            public void onPartitionsAssigned(Collection<StreamPartition> partitions) {
-                if (consumerRebalanceListener != null) {
-                    consumerRebalanceListener.onPartitionsAssigned(convertStreamPartition(partitions));
-                }
-            }
-        });
+        disConsumer.subscribe(collection, ConvertUtils.convert2DisConsumerRebalanceListener(consumerRebalanceListener));
     }
 
     @Override
     public void subscribe(Collection<String> topics) {
-        subscribe(topics, new NoOpConsumerRebalanceListener());
+        disConsumer.subscribe(topics, new DisNoOpDisConsumerRebalanceListener());
     }
 
     @Override
     public void assign(Collection<TopicPartition> partitions) {
-        disConsumer.assign(convertTopicPartition(partitions));
+        disConsumer.assign(ConvertUtils.convert2StreamPartitionCollection(partitions));
     }
 
     @Override
     public void subscribe(Pattern pattern, ConsumerRebalanceListener consumerRebalanceListener) {
-        disConsumer.subscribe(pattern, new DisConsumerRebalanceListener() {
-            @Override
-            public void onPartitionsRevoked(Collection<StreamPartition> partitions) {
-                if (consumerRebalanceListener != null) {
-                    consumerRebalanceListener.onPartitionsRevoked(convertStreamPartition(partitions));
-                }
-            }
-
-            @Override
-            public void onPartitionsAssigned(Collection<StreamPartition> partitions) {
-                if (consumerRebalanceListener != null) {
-                    consumerRebalanceListener.onPartitionsAssigned(convertStreamPartition(partitions));
-                }
-            }
-        });
+        disConsumer.subscribe(pattern, ConvertUtils.convert2DisConsumerRebalanceListener(consumerRebalanceListener));
     }
 
     @Override
@@ -270,83 +184,49 @@ public class DISKafkaConsumer<K, V> implements Consumer<K, V> {
 
     @Override
     public void commitSync(Map<TopicPartition, OffsetAndMetadata> offsets) {
-        commitAsync(offsets, null);
+        disConsumer.commitSync(ConvertUtils.convert2DisOffsetAndMetadataMap(offsets));
     }
 
     @Override
     public void commitAsync() {
-        disConsumer.commitAsync(null);
+        disConsumer.commitAsync();
     }
 
     @Override
     public void commitAsync(OffsetCommitCallback offsetCommitCallback) {
-        disConsumer.commitAsync(new DisOffsetCommitCallback() {
-            @Override
-            public void onComplete(Map<StreamPartition, DisOffsetAndMetadata> offsets, Exception exception) {
-                Map<TopicPartition, OffsetAndMetadata> results = null;
-                if (offsets != null) {
-                    results = new HashMap<>();
-                    for (Map.Entry<StreamPartition, DisOffsetAndMetadata> entry : offsets.entrySet()) {
-                        results.put(new TopicPartition(entry.getKey().stream(), entry.getKey().partition()), new OffsetAndMetadata(entry.getValue().offset(), entry.getValue().metadata()));
-                    }
-                }
-                if (offsetCommitCallback != null) {
-                    offsetCommitCallback.onComplete(results, exception);
-                }
-            }
-        });
+        disConsumer.commitAsync(ConvertUtils.convert2DisOffsetCommitCallback(offsetCommitCallback));
     }
 
     @Override
-    public void commitAsync(Map<TopicPartition, OffsetAndMetadata> map, OffsetCommitCallback offsetCommitCallback) {
-        Map<StreamPartition, DisOffsetAndMetadata> tmp = new HashMap<>();
-        for (Map.Entry<TopicPartition, OffsetAndMetadata> entry : map.entrySet()) {
-            tmp.put(new StreamPartition(entry.getKey().topic(), entry.getKey().partition()), new DisOffsetAndMetadata(entry.getValue().offset(), entry.getValue().metadata()));
-        }
-        disConsumer.commitAsync(tmp, new DisOffsetCommitCallback() {
-            @Override
-            public void onComplete(Map<StreamPartition, DisOffsetAndMetadata> offsets, Exception exception) {
-                Map<TopicPartition, OffsetAndMetadata> results = null;
-                if (offsets != null) {
-                    results = new HashMap<>();
-                    for (Map.Entry<StreamPartition, DisOffsetAndMetadata> entry : offsets.entrySet()) {
-                        results.put(new TopicPartition(entry.getKey().stream(), entry.getKey().partition()), new OffsetAndMetadata(entry.getValue().offset(), entry.getValue().metadata()));
-                    }
-                }
-                if (offsetCommitCallback != null) {
-                    offsetCommitCallback.onComplete(results, exception);
-                }
-            }
-        });
+    public void commitAsync(Map<TopicPartition, OffsetAndMetadata> offsets, OffsetCommitCallback offsetCommitCallback) {
+        disConsumer.commitAsync(ConvertUtils.convert2DisOffsetAndMetadataMap(offsets),
+                ConvertUtils.convert2DisOffsetCommitCallback(offsetCommitCallback));
     }
 
     @Override
     public void seek(TopicPartition partition, long offset) {
-        disConsumer.seek(new StreamPartition(partition.topic(), partition.partition()), offset);
+        disConsumer.seek(ConvertUtils.convert2StreamPartition(partition), offset);
     }
 
     @Override
     public void seekToBeginning(Collection<TopicPartition> partitions) {
-        disConsumer.seekToBeginning(convertTopicPartition(partitions));
+        disConsumer.seekToBeginning(ConvertUtils.convert2StreamPartitionCollection(partitions));
     }
 
     @Override
     public void seekToEnd(Collection<TopicPartition> partitions) {
-        disConsumer.seekToEnd(convertTopicPartition(partitions));
+        disConsumer.seekToEnd(ConvertUtils.convert2StreamPartitionCollection(partitions));
     }
 
     @Override
     public long position(TopicPartition partition) {
-        return disConsumer.position(new StreamPartition(partition.topic(), partition.partition()));
+        return disConsumer.position(ConvertUtils.convert2StreamPartition(partition));
     }
 
     @Override
     public OffsetAndMetadata committed(TopicPartition partition) {
-        DisOffsetAndMetadata disOffsetAndMetadata = disConsumer.committed(new StreamPartition(partition.topic(), partition.partition()));
-        if (disOffsetAndMetadata != null) {
-            return new OffsetAndMetadata(disOffsetAndMetadata.offset(), disOffsetAndMetadata.metadata());
-        }
-        return null;
+        return ConvertUtils.convert2OffsetAndMetadata(
+                disConsumer.committed(ConvertUtils.convert2StreamPartition(partition)));
     }
 
     @Override
@@ -382,17 +262,17 @@ public class DISKafkaConsumer<K, V> implements Consumer<K, V> {
 
     @Override
     public Set<TopicPartition> paused() {
-        return convertStreamPartition(disConsumer.paused());
+        return ConvertUtils.convert2TopicPartitionSet(disConsumer.paused());
     }
 
     @Override
     public void pause(Collection<TopicPartition> partitions) {
-        disConsumer.pause(convertTopicPartition(partitions));
+        disConsumer.pause(ConvertUtils.convert2StreamPartitionCollection(partitions));
     }
 
     @Override
     public void resume(Collection<TopicPartition> partitions) {
-        disConsumer.resume(convertTopicPartition(partitions));
+        disConsumer.resume(ConvertUtils.convert2StreamPartitionCollection(partitions));
     }
 
     @Override
@@ -412,40 +292,37 @@ public class DISKafkaConsumer<K, V> implements Consumer<K, V> {
 
     @Override
     public Map<TopicPartition, OffsetAndTimestamp> offsetsForTimes(Map<TopicPartition, Long> map) {
-        Map<StreamPartition, Long> tmp = new HashMap<>();
-        for (Map.Entry<TopicPartition, Long> entry : map.entrySet()) {
-            tmp.put(new StreamPartition(entry.getKey().topic(), entry.getKey().partition()), entry.getValue());
-        }
-        Map<StreamPartition, DisOffsetAndTimestamp> offsets = disConsumer.offsetsForTimes(tmp);
+        Map<StreamPartition, DisOffsetAndTimestamp> offsets = disConsumer.offsetsForTimes(ConvertUtils.convert2StreamPartitionLongMap(map));
         Map<TopicPartition, OffsetAndTimestamp> results = new HashMap<>();
         for (Map.Entry<StreamPartition, DisOffsetAndTimestamp> entry : offsets.entrySet()) {
-            results.put(new TopicPartition(entry.getKey().stream(), entry.getKey().partition()), new OffsetAndTimestamp(entry.getValue().offset(), entry.getValue().timestamp()));
+            results.put(ConvertUtils.convert2TopicPartition(entry.getKey()), new OffsetAndTimestamp(entry.getValue().offset(), entry.getValue().timestamp()));
         }
         return results;
     }
 
     @Override
     public Map<TopicPartition, Long> beginningOffsets(Collection<TopicPartition> collection) {
-        Map<StreamPartition, Long> offsets = disConsumer.beginningOffsets(convertTopicPartition(collection));
-        Map<TopicPartition, Long> results = new HashMap<>();
-        for (Map.Entry<StreamPartition, Long> entry : offsets.entrySet()) {
-            results.put(new TopicPartition(entry.getKey().stream(), entry.getKey().partition()), entry.getValue());
-        }
-        return results;
+        return ConvertUtils.convert2TopicPartitionLongMap(
+                disConsumer.beginningOffsets(ConvertUtils.convert2StreamPartitionCollection(collection)));
     }
 
     @Override
     public Map<TopicPartition, Long> endOffsets(Collection<TopicPartition> collection) {
-        Map<StreamPartition, Long> offsets = disConsumer.endOffsets(convertTopicPartition(collection));
-        Map<TopicPartition, Long> results = new HashMap<>();
-        for (Map.Entry<StreamPartition, Long> entry : offsets.entrySet()) {
-            results.put(new TopicPartition(entry.getKey().stream(), entry.getKey().partition()), entry.getValue());
-        }
-        return results;
+        return ConvertUtils.convert2TopicPartitionLongMap(
+                disConsumer.endOffsets(ConvertUtils.convert2StreamPartitionCollection(collection)));
     }
 
     @Override
     public void subscribe(Pattern pattern) {
-        subscribe(pattern,new NoOpConsumerRebalanceListener());
+        disConsumer.subscribe(pattern, new DisNoOpDisConsumerRebalanceListener());
+    }
+
+    /**
+     * Update DIS credentials, such as ak/sk/securityToken
+     *
+     * @param credentials new credentials
+     */
+    public void updateCredentials(DISCredentials credentials) {
+        disConsumer.updateCredentials(credentials);
     }
 }

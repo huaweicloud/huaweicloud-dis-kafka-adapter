@@ -24,6 +24,7 @@ import com.huaweicloud.dis.adapter.common.model.DisOffsetAndMetadata;
 import com.huaweicloud.dis.adapter.common.model.DisOffsetResetStrategy;
 import com.huaweicloud.dis.adapter.common.model.PartitionIterator;
 import com.huaweicloud.dis.adapter.common.model.StreamPartition;
+import com.huaweicloud.dis.core.DISCredentials;
 import com.huaweicloud.dis.exception.DISClientException;
 import com.huaweicloud.dis.iface.data.request.GetPartitionCursorRequest;
 import com.huaweicloud.dis.iface.data.response.GetPartitionCursorResult;
@@ -47,10 +48,6 @@ public class DISConsumer extends AbstractAdapter implements IDISConsumer {
     private static final Logger log = LoggerFactory.getLogger(DISConsumer.class);
     private static final long NO_CURRENT_THREAD = -1L;
 
-    public static final String KEY_MAX_PARTITION_FETCH_RECORDS = "max.partition.fetch.records";
-
-    public static final String KEY_MAX_FETCH_THREADS = "max.fetch.threads";
-
     private Coordinator coordinator;
     private SubscriptionState subscriptions;
     private boolean closed = false;
@@ -68,13 +65,14 @@ public class DISConsumer extends AbstractAdapter implements IDISConsumer {
 
     public DISConsumer(DISConfig disConfig) {
         super(disConfig);
-        this.clientId = disConfig.get("client.id", "consumer-" + UUID.randomUUID());
-        this.groupId = disConfig.get("group.id", "");
-        DisOffsetResetStrategy disOffsetResetStrategy = DisOffsetResetStrategy.valueOf(disConfig.get("auto.offset.reset", "LATEST").toUpperCase());
+        this.clientId = disConfig.get(DisConsumerConfig.CLIENT_ID_CONFIG, "consumer-" + UUID.randomUUID());
+        this.groupId = disConfig.get(DisConsumerConfig.GROUP_ID_CONFIG, "");
+        DisOffsetResetStrategy disOffsetResetStrategy = DisOffsetResetStrategy.valueOf(
+                disConfig.get(DisConsumerConfig.AUTO_OFFSET_RESET_CONFIG, DisOffsetResetStrategy.LATEST.name()).toUpperCase());
         this.subscriptions = new SubscriptionState(disOffsetResetStrategy);
         this.nextIterators = new ConcurrentHashMap<>();
-        boolean autoCommitEnabled = disConfig.getBoolean("enable.auto.commit", true);
-        long autoCommitIntervalMs = Long.valueOf(disConfig.get("auto.commit.interval.ms", "5000"));
+        boolean autoCommitEnabled = disConfig.getBoolean(DisConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, true);
+        long autoCommitIntervalMs = Long.valueOf(disConfig.get(DisConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG, "5000"));
 
         this.coordinator = new Coordinator(this.disAsync,
                 this.clientId,
@@ -85,7 +83,7 @@ public class DISConsumer extends AbstractAdapter implements IDISConsumer {
                 this.nextIterators,
                 disConfig);
         this.fetcher = new Fetcher(this.disAsync,
-                disConfig.getInt(DISConsumer.KEY_MAX_PARTITION_FETCH_RECORDS, 1000),
+                disConfig.getInt(DisConsumerConfig.MAX_PARTITION_FETCH_RECORDS_CONFIG, 1000),
                 this.subscriptions,
                 this.coordinator,
                 this.nextIterators);
@@ -541,6 +539,16 @@ public class DISConsumer extends AbstractAdapter implements IDISConsumer {
 
     @Override
     protected int getThreadPoolSize() {
-        return config.getInt(KEY_MAX_FETCH_THREADS, 50);
+        return config.getInt(DisConsumerConfig.MAX_FETCH_THREADS_CONFIG, 50);
+    }
+
+    /**
+     * Update DIS credentials, such as ak/sk/securityToken
+     *
+     * @param credentials new credentials
+     */
+    public void updateCredentials(DISCredentials credentials) {
+        super.updateCredentials(credentials);
+        coordinator.updateInnerClientCredentials(credentials);
     }
 }

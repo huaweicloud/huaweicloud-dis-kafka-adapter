@@ -21,7 +21,9 @@ import com.huaweicloud.dis.adapter.common.Utils;
 import com.huaweicloud.dis.adapter.common.model.DisProducerRecord;
 import com.huaweicloud.dis.adapter.common.model.ProduceCallback;
 import com.huaweicloud.dis.adapter.common.producer.DISProducer;
+import com.huaweicloud.dis.adapter.common.producer.DisProducerConfig;
 import com.huaweicloud.dis.adapter.common.producer.IDISProducer;
+import com.huaweicloud.dis.core.DISCredentials;
 import com.huaweicloud.dis.core.util.StringUtils;
 import com.huaweicloud.dis.iface.data.response.PutRecordsResult;
 import com.huaweicloud.dis.iface.data.response.PutRecordsResultEntry;
@@ -31,11 +33,7 @@ import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
-import org.apache.kafka.common.Metric;
-import org.apache.kafka.common.MetricName;
-import org.apache.kafka.common.Node;
-import org.apache.kafka.common.PartitionInfo;
-import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.*;
 import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringSerializer;
@@ -96,7 +94,7 @@ public class DISKafkaProducer<K, V> implements Producer<K, V> {
 
         if (keySerializer == null) {
             Class keySerializerClass = StringSerializer.class;
-            String className = (String) disConfig.get("key.serializer");
+            String className = (String) disConfig.get(DisProducerConfig.KEY_SERIALIZER_CLASS_CONFIG);
             if (className != null) {
                 try {
                     keySerializerClass = Class.forName(className);
@@ -113,7 +111,7 @@ public class DISKafkaProducer<K, V> implements Producer<K, V> {
 
         if (valueSerializer == null) {
             Class valueSerializerClass = StringSerializer.class;
-            String className = (String) disConfig.get("value.serializer");
+            String className = (String) disConfig.get(DisProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG);
             if (className != null) {
                 try {
                     valueSerializerClass = Class.forName(className);
@@ -161,8 +159,11 @@ public class DISKafkaProducer<K, V> implements Producer<K, V> {
             produceCallback = new ProduceCallback() {
                 @Override
                 public void onCompletion(PutRecordsResult result, Exception exception) {
-                    RecordMetadata recordMetadata = buildRecordMetadata(stream, result);
-                    callback.onCompletion(recordMetadata, exception);
+                    if (exception == null) {
+                        callback.onCompletion(buildRecordMetadata(stream, result), null);
+                    } else {
+                        callback.onCompletion(null, exception);
+                    }
                 }
             };
         }
@@ -296,5 +297,14 @@ public class DISKafkaProducer<K, V> implements Producer<K, V> {
     @Override
     public void abortTransaction() throws ProducerFencedException {
         throw new UnsupportedOperationException();
+    }
+
+    /**
+     * Update DIS credentials, such as ak/sk/securityToken
+     *
+     * @param credentials new credentials
+     */
+    public void updateCredentials(DISCredentials credentials) {
+        disProducer.updateCredentials(credentials);
     }
 }

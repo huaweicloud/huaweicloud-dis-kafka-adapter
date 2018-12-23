@@ -18,6 +18,7 @@ package com.huaweicloud.dis.adapter.common;
 
 import com.huaweicloud.dis.DISClientAsync;
 import com.huaweicloud.dis.DISConfig;
+import com.huaweicloud.dis.core.DISCredentials;
 
 import java.util.Map;
 import java.util.Properties;
@@ -50,6 +51,15 @@ public abstract class AbstractAdapter {
 
     public void close() {
         this.disAsync.close();
+    }
+
+    /**
+     * Update DIS credentials, such as ak/sk/securityToken
+     *
+     * @param credentials new credentials
+     */
+    public void updateCredentials(DISCredentials credentials) {
+        this.disAsync.updateCredentials(credentials);
     }
 
     protected abstract int getThreadPoolSize();
