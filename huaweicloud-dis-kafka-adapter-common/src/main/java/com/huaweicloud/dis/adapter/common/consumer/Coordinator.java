@@ -417,6 +417,9 @@ public class Coordinator {
 
                 @Override
                 public void onSuccess(CommitCheckpointResult commitCheckpointResult) {
+                    if (subscriptions.isAssigned(offset.getKey())) {
+                        subscriptions.committed(offset.getKey(), offset.getValue());
+                    }
                     countDownLatch.countDown();
 
                     if (callback != null) {
@@ -664,16 +667,19 @@ public class Coordinator {
 
                 @Override
                 public void onSuccess(GetCheckpointResult getCheckpointResult) {
-                    countDownLatch.countDown();
-                    if (getCheckpointResult.getMetadata() == null) {
-                        getCheckpointResult.setMetadata("");
-                    }
+                    try {
+                        if (getCheckpointResult.getMetadata() == null) {
+                            getCheckpointResult.setMetadata("");
+                        }
 
-                    if (!StringUtils.isNullOrEmpty(getCheckpointResult.getSequenceNumber())
-                            && Long.valueOf(getCheckpointResult.getSequenceNumber()) >= 0) {
-                        offsets.put(partition,
-                                new DisOffsetAndMetadata(Long.valueOf(getCheckpointResult.getSequenceNumber()),
-                                        getCheckpointResult.getMetadata()));
+                        if (!StringUtils.isNullOrEmpty(getCheckpointResult.getSequenceNumber())
+                                && Long.valueOf(getCheckpointResult.getSequenceNumber()) >= 0) {
+                            offsets.put(partition,
+                                    new DisOffsetAndMetadata(Long.valueOf(getCheckpointResult.getSequenceNumber()),
+                                            getCheckpointResult.getMetadata()));
+                        }
+                    } finally {
+                        countDownLatch.countDown();
                     }
                 }
             });

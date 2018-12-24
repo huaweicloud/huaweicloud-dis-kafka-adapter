@@ -39,7 +39,7 @@ import java.util.regex.Pattern;
 
 public class DISKafkaConsumer<K, V> implements Consumer<K, V> {
     private static final Logger log = LoggerFactory.getLogger(DISKafkaConsumer.class);
-    private static final Node[] EMPTY_NODES = null;
+    private static final Node[] EMPTY_NODES = new Node[0];
 
     private DISConsumer disConsumer;
 
@@ -254,6 +254,7 @@ public class DISKafkaConsumer<K, V> implements Consumer<K, V> {
             for (int i = 0; i < describeStreamResult.getReadablePartitionCount(); i++) {
                 partitionInfos.add(new PartitionInfo(describeStreamResult.getStreamName(), i, Node.noNode(), EMPTY_NODES, EMPTY_NODES));
             }
+            map.put(describeStreamResult.getStreamName(), partitionInfos);
         }
         return map;
     }

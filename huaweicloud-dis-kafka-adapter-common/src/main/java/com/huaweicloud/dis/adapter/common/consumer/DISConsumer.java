@@ -301,7 +301,7 @@ public class DISConsumer extends AbstractAdapter implements IDISConsumer {
             DisOffsetAndMetadata committed;
             if (subscriptions.isAssigned(partition)) {
                 committed = this.subscriptions.committed(partition);
-                if (committed == null) {
+                if (committed == null || subscriptions.refreshCommitsNeeded()) {
                     coordinator.refreshCommittedOffsetsIfNeeded();
                     committed = this.subscriptions.committed(partition);
                 }
