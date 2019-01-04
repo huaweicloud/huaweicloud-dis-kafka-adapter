@@ -18,13 +18,15 @@ package com.huaweicloud.dis.adapter.common.consumer;
 
 import com.huaweicloud.dis.DISConfig;
 import com.huaweicloud.dis.adapter.common.AbstractAdapter;
-import com.huaweicloud.dis.adapter.common.Constants;
 import com.huaweicloud.dis.adapter.common.Utils;
 import com.huaweicloud.dis.adapter.common.model.DisOffsetAndMetadata;
 import com.huaweicloud.dis.adapter.common.model.DisOffsetResetStrategy;
 import com.huaweicloud.dis.adapter.common.model.PartitionIterator;
 import com.huaweicloud.dis.adapter.common.model.StreamPartition;
+import com.huaweicloud.dis.core.DISCredentials;
+import com.huaweicloud.dis.core.handler.AsyncHandler;
 import com.huaweicloud.dis.exception.DISClientException;
+import com.huaweicloud.dis.exception.DISTimestampOutOfRangeException;
 import com.huaweicloud.dis.iface.data.request.GetPartitionCursorRequest;
 import com.huaweicloud.dis.iface.data.response.GetPartitionCursorResult;
 import com.huaweicloud.dis.iface.data.response.Record;
@@ -33,13 +35,17 @@ import com.huaweicloud.dis.iface.stream.request.ListStreamsRequest;
 import com.huaweicloud.dis.iface.stream.response.DescribeStreamResult;
 import com.huaweicloud.dis.iface.stream.response.ListStreamsResult;
 import com.huaweicloud.dis.iface.stream.response.PartitionResult;
+import com.huaweicloud.dis.util.JsonUtils;
+import com.huaweicloud.dis.util.PartitionCursorTypeEnum;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Pattern;
 
 
@@ -47,10 +53,7 @@ public class DISConsumer extends AbstractAdapter implements IDISConsumer {
     private static final Logger log = LoggerFactory.getLogger(DISConsumer.class);
     private static final long NO_CURRENT_THREAD = -1L;
 
-    public static final String KEY_MAX_PARTITION_FETCH_RECORDS = "max.partition.fetch.records";
-
-    public static final String KEY_MAX_FETCH_THREADS = "max.fetch.threads";
-
+    private static final long MAX_POLL_TIMEOUT = 30000L;
     private Coordinator coordinator;
     private SubscriptionState subscriptions;
     private boolean closed = false;
@@ -60,6 +63,7 @@ public class DISConsumer extends AbstractAdapter implements IDISConsumer {
     private String clientId;
     private String groupId;
     private Fetcher fetcher;
+    private boolean forceWakeup = false;
     ConcurrentHashMap<StreamPartition, PartitionCursor> nextIterators;
 
     public DISConsumer(Map configs) {
@@ -68,13 +72,15 @@ public class DISConsumer extends AbstractAdapter implements IDISConsumer {
 
     public DISConsumer(DISConfig disConfig) {
         super(disConfig);
-        this.clientId = disConfig.get("client.id", "consumer-" + UUID.randomUUID());
-        this.groupId = disConfig.get("group.id", "");
-        DisOffsetResetStrategy disOffsetResetStrategy = DisOffsetResetStrategy.valueOf(disConfig.get("auto.offset.reset", "LATEST").toUpperCase());
+        log.trace("Starting the DIS consumer");
+        this.clientId = disConfig.get(DisConsumerConfig.CLIENT_ID_CONFIG, "consumer-" + UUID.randomUUID());
+        this.groupId = disConfig.get(DisConsumerConfig.GROUP_ID_CONFIG, "");
+        DisOffsetResetStrategy disOffsetResetStrategy = DisOffsetResetStrategy.valueOf(
+                disConfig.get(DisConsumerConfig.AUTO_OFFSET_RESET_CONFIG, DisOffsetResetStrategy.LATEST.name()).toUpperCase());
         this.subscriptions = new SubscriptionState(disOffsetResetStrategy);
         this.nextIterators = new ConcurrentHashMap<>();
-        boolean autoCommitEnabled = disConfig.getBoolean("enable.auto.commit", true);
-        long autoCommitIntervalMs = Long.valueOf(disConfig.get("auto.commit.interval.ms", "5000"));
+        boolean autoCommitEnabled = disConfig.getBoolean(DisConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, true);
+        long autoCommitIntervalMs = Long.valueOf(disConfig.get(DisConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG, "5000"));
 
         this.coordinator = new Coordinator(this.disAsync,
                 this.clientId,
@@ -85,11 +91,11 @@ public class DISConsumer extends AbstractAdapter implements IDISConsumer {
                 this.nextIterators,
                 disConfig);
         this.fetcher = new Fetcher(this.disAsync,
-                disConfig.getInt(DISConsumer.KEY_MAX_PARTITION_FETCH_RECORDS, 1000),
+                disConfig.getInt(DisConsumerConfig.MAX_PARTITION_FETCH_RECORDS_CONFIG, 1000),
                 this.subscriptions,
                 this.coordinator,
                 this.nextIterators);
-        log.info("create DISConsumer successfully");
+        log.info("DIS consumer created");
     }
 
     @Override
@@ -153,7 +159,6 @@ public class DISConsumer extends AbstractAdapter implements IDISConsumer {
         } finally {
             release();
         }
-
     }
 
     @Override
@@ -172,15 +177,32 @@ public class DISConsumer extends AbstractAdapter implements IDISConsumer {
     public Map<StreamPartition, List<Record>> poll(long timeout) {
         acquire();
         try {
-            if (timeout < 0)
+            if (timeout < 0) {
                 throw new IllegalArgumentException("Timeout must not be negative");
+            }
+            if (timeout > MAX_POLL_TIMEOUT && subscriptions.partitionsAutoAssigned()) {
+                // timeout should not be too long when using consumer group.
+                timeout = MAX_POLL_TIMEOUT;
+            }
 
+            long endTime = System.currentTimeMillis() + timeout;
+
+            // throws exception when some exceptions occurs in fetcher.fetchRecords()
+            fetcher.throwIfFetchError();
             coordinator.executeDelayedTask();
             if (subscriptions.partitionsAutoAssigned()) {
                 coordinator.ensureGroupStable();
             }
-            fetcher.sendFetchRequests();
-            return fetcher.fetchRecords(timeout);
+            Fetcher.FetchResult fetchResult;
+            forceWakeup = false;
+            long remaining = endTime - System.currentTimeMillis();
+            do {
+                fetcher.sendFetchRequests();
+                fetchResult = fetcher.fetchRecords(remaining);
+                remaining = endTime - System.currentTimeMillis();
+            }
+            while (fetchResult.getRecordsCount() == 0 && remaining > 0 && !forceWakeup);
+            return fetchResult.getRecords();
         } finally {
             release();
         }
@@ -303,7 +325,7 @@ public class DISConsumer extends AbstractAdapter implements IDISConsumer {
             DisOffsetAndMetadata committed;
             if (subscriptions.isAssigned(partition)) {
                 committed = this.subscriptions.committed(partition);
-                if (committed == null) {
+                if (committed == null || subscriptions.refreshCommitsNeeded()) {
                     coordinator.refreshCommittedOffsetsIfNeeded();
                     committed = this.subscriptions.committed(partition);
                 }
@@ -379,7 +401,6 @@ public class DISConsumer extends AbstractAdapter implements IDISConsumer {
             for (StreamPartition partition : partitions) {
                 log.debug("Pausing partition {}", partition);
                 subscriptions.pause(partition);
-                fetcher.pause(partition);
             }
         } finally {
             release();
@@ -401,62 +422,145 @@ public class DISConsumer extends AbstractAdapter implements IDISConsumer {
 
     @Override
     public void close() {
-        closed = true;
-        super.close();
+        acquire();
+        try {
+            log.debug("Closing the Kafka consumer.");
+            closed = true;
+            wakeup();
+            this.coordinator.close();
+            super.close();
+            log.debug("The DIS consumer has closed.");
+        } finally {
+            release();
+        }
     }
-
 
     @Override
     public void wakeup() {
+        forceWakeup = true;
         fetcher.wakeup();
     }
 
     private void acquire() {
         ensureNotClosed();
         long threadId = Thread.currentThread().getId();
-        if (threadId != currentThread.get() && !currentThread.compareAndSet(NO_CURRENT_THREAD, threadId))
+        if (threadId != currentThread.get() && !currentThread.compareAndSet(NO_CURRENT_THREAD, threadId)) {
             throw new ConcurrentModificationException("DisConsumer is not safe for multi-threaded access");
+        }
         refcount.incrementAndGet();
     }
 
     private void ensureNotClosed() {
-        if (this.closed)
+        if (this.closed) {
             throw new IllegalStateException("This consumer has already been closed.");
+        }
     }
 
     private void release() {
-        if (refcount.decrementAndGet() == 0)
+        if (refcount.decrementAndGet() == 0) {
             currentThread.set(NO_CURRENT_THREAD);
+        }
     }
 
     @Override
     public Map<StreamPartition, DisOffsetAndTimestamp> offsetsForTimes(Map<StreamPartition, Long> map) {
-        Map<StreamPartition, DisOffsetAndTimestamp> results = new HashMap<>();
-        for(Map.Entry<StreamPartition,Long> entry: map.entrySet())
-        {
+        if (map == null) {
+            throw new IllegalArgumentException("timestamp should not be null");
+        }
+
+        for (Map.Entry<StreamPartition, Long> entry : map.entrySet()) {
+            if (entry.getValue() <= 0) {
+                throw new IllegalArgumentException("The target time for partition " + entry.getKey() + " is " +
+                        entry.getValue() + ". The target time should great than 0.");
+            }
+        }
+
+        Map<StreamPartition, DisOffsetAndTimestamp> results = new ConcurrentHashMap<>();
+        final AtomicReference<Exception> exceptionAtomicReference = new AtomicReference<>();
+        final CountDownLatch countDownLatch = new CountDownLatch(map.size());
+        for (Map.Entry<StreamPartition, Long> entry : map.entrySet()) {
             StreamPartition partition = entry.getKey();
             long timestamp = entry.getValue();
-            if(timestamp <= 0)
-            {
-                throw new IllegalArgumentException("timestamp must be great than 0, partition " + partition + " timestamp " + timestamp);
-            }
             GetPartitionCursorRequest getPartitionCursorRequest = new GetPartitionCursorRequest();
-            getPartitionCursorRequest.setCursorType(Constants.AT_TIMESTAMP);
+            getPartitionCursorRequest.setCursorType(PartitionCursorTypeEnum.AT_TIMESTAMP.name());
             getPartitionCursorRequest.setStreamName(partition.stream());
             getPartitionCursorRequest.setPartitionId(String.valueOf(partition.partition()));
             getPartitionCursorRequest.setTimestamp(timestamp);
-            try {
-                GetPartitionCursorResult iterator = disAsync.getPartitionCursor(getPartitionCursorRequest);
-                PartitionIterator partitionIterator = Utils.decodeIterator(iterator.getPartitionCursor());
-                results.put(partition,new DisOffsetAndTimestamp(Long.valueOf(partitionIterator.getGetIteratorParam().getStartingSequenceNumber()),timestamp));
-            }
-            catch (DISClientException e)
-            {
-                log.error("get iterator for " + partition + " error" );
-                throw e;
-            }
 
+            disAsync.getPartitionCursorAsync(getPartitionCursorRequest, new AsyncHandler<GetPartitionCursorResult>() {
+                @Override
+                public void onError(Exception e) {
+                    // timestamp is expired
+                    if (e instanceof DISTimestampOutOfRangeException) {
+                        long earliestTimestamp = ((DISTimestampOutOfRangeException) e).getEarliestTimestamp();
+                        log.warn("{} timestamp {} is expired, will starts from the earliest timestamp {}", partition, timestamp, earliestTimestamp);
+                        GetPartitionCursorRequest reGetPartitionCursorRequest = new GetPartitionCursorRequest();
+                        reGetPartitionCursorRequest.setCursorType(PartitionCursorTypeEnum.AT_TIMESTAMP.name());
+                        reGetPartitionCursorRequest.setStreamName(partition.stream());
+                        reGetPartitionCursorRequest.setPartitionId(String.valueOf(partition.partition()));
+                        reGetPartitionCursorRequest.setTimestamp(earliestTimestamp);
+                        disAsync.getPartitionCursorAsync(reGetPartitionCursorRequest, new AsyncHandler<GetPartitionCursorResult>() {
+                            @Override
+                            public void onError(Exception e) {
+                                exceptionAtomicReference.set(e);
+                                countDownLatch.countDown();
+                                log.error("Failed to reGetPartitionCursorAsync, error : [{}], request : [{}]",
+                                        e.getMessage(), JsonUtils.objToJson(getPartitionCursorRequest));
+                            }
+
+                            @Override
+                            public void onSuccess(GetPartitionCursorResult getPartitionCursorResult) {
+                                try {
+                                    PartitionIterator partitionIterator = Utils.decodeIterator(getPartitionCursorResult.getPartitionCursor());
+                                    results.put(partition, new DisOffsetAndTimestamp(
+                                            Long.valueOf(partitionIterator.getGetIteratorParam().getStartingSequenceNumber()), earliestTimestamp));
+                                } catch (Exception e) {
+                                    exceptionAtomicReference.set(e);
+                                    log.error(e.getMessage(), e);
+                                } finally {
+                                    countDownLatch.countDown();
+                                }
+                            }
+                        });
+                    } else {
+                        exceptionAtomicReference.set(e);
+                        countDownLatch.countDown();
+                        log.error("Failed to getPartitionCursorAsync, error : [{}], request : [{}]",
+                                e.getMessage(), JsonUtils.objToJson(getPartitionCursorRequest));
+                    }
+                }
+
+                @Override
+                public void onSuccess(GetPartitionCursorResult getPartitionCursorResult) {
+                    try {
+                        PartitionIterator partitionIterator = Utils.decodeIterator(getPartitionCursorResult.getPartitionCursor());
+                        results.put(partition, new DisOffsetAndTimestamp(
+                                Long.valueOf(partitionIterator.getGetIteratorParam().getStartingSequenceNumber()), timestamp));
+                    } catch (Exception e) {
+                        exceptionAtomicReference.set(e);
+                        log.error(e.getMessage(), e);
+                    } finally {
+                        countDownLatch.countDown();
+                    }
+                }
+            });
         }
+
+        try {
+            countDownLatch.await();
+        } catch (InterruptedException e) {
+            log.error(e.getMessage(), e);
+        }
+
+        Exception e = exceptionAtomicReference.get();
+        if (e != null) {
+            if (e instanceof DISClientException) {
+                throw (DISClientException) e;
+            } else {
+                throw new DISClientException(e);
+            }
+        }
+
         return results;
     }
 
@@ -541,6 +645,17 @@ public class DISConsumer extends AbstractAdapter implements IDISConsumer {
 
     @Override
     protected int getThreadPoolSize() {
-        return config.getInt(KEY_MAX_FETCH_THREADS, 50);
+        return config.getInt(DisConsumerConfig.MAX_FETCH_THREADS_CONFIG, 50);
+    }
+
+    /**
+     * Update DIS credentials, such as ak/sk/securityToken
+     *
+     * @param credentials new credentials
+     */
+    @Override
+    public void updateCredentials(DISCredentials credentials) {
+        super.updateCredentials(credentials);
+        coordinator.updateInnerClientCredentials(credentials);
     }
 }

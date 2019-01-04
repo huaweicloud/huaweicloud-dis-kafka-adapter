@@ -18,6 +18,7 @@ package com.huaweicloud.dis.adapter.common.producer;
 
 import com.huaweicloud.dis.adapter.common.model.DisProducerRecord;
 import com.huaweicloud.dis.adapter.common.model.ProduceCallback;
+import com.huaweicloud.dis.core.DISCredentials;
 import com.huaweicloud.dis.iface.data.response.PutRecordsResult;
 import com.huaweicloud.dis.iface.stream.response.DescribeStreamResult;
 
@@ -55,5 +56,10 @@ public interface IDISProducer {
      */
     public void close(long timeout, TimeUnit unit);
 
+    /**
+     * Update DIS credentials, such as ak/sk/securityToken
+     * @param credentials new credentials
+     */
+    void updateCredentials(DISCredentials credentials);
 
 }

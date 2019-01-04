@@ -17,7 +17,6 @@
 package com.huaweicloud.dis.adapter.common;
 
 import com.huaweicloud.dis.DISConfig;
-import com.huaweicloud.dis.adapter.common.consumer.PartitionCursor;
 import com.huaweicloud.dis.adapter.common.model.PartitionIterator;
 import com.huaweicloud.dis.util.JsonUtils;
 import org.slf4j.Logger;
@@ -85,4 +84,15 @@ public class Utils {
         return partitionIterator;
     }
 
+    /**
+     * Thread sleep time in millis
+     *
+     * @param millis sleep time
+     */
+    public static void sleep(long millis) {
+        try {
+            Thread.sleep(millis);
+        } catch (InterruptedException ignored) {
+        }
+    }
 }

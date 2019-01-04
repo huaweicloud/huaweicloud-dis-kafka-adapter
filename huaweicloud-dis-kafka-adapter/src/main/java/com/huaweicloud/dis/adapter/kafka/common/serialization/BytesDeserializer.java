@@ -13,23 +13,26 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package com.huaweicloud.dis.adapter.kafka.common.serialization;
 
-package com.huaweicloud.dis.adapter.common;
+import com.huaweicloud.dis.adapter.kafka.common.utils.Bytes;
 
-public class Constants {
+import java.util.Map;
 
-    public static final String CHECKPOINT_LAST_COMPUTE = "LAST_COMPUTE";
+public class BytesDeserializer implements Deserializer<Bytes> {
 
-    public static final String CHECKPOINT_LAST_READ = "LAST_READ";
+    public void configure(Map<String, ?> configs, boolean isKey) {
+        // nothing to do
+    }
 
-    public static final String CHECKPOINT_COMPUTE_TIMESTAMP = "AT_COMPUTE_TIMESTAMP";
+    public Bytes deserialize(String topic, byte[] data) {
+        if (data == null)
+            return null;
 
-    public static final String CHECKPOINT_LOG_APPEND_TIMESTAMP = "AT_LOG_APPEND_TIMESTAMP";
+        return new Bytes(data);
+    }
 
-    public static final String ERROR_CODE_APP_NAME_NOT_FOUND = "DIS.4332";
-
-    public static final String ERROR_CODE_APP_NAME_EXIST = "DIS.4330";
-
-    public static final String AT_TIMESTAMP = "AT_TIMESTAMP";
-
+    public void close() {
+        // nothing to do
+    }
 }

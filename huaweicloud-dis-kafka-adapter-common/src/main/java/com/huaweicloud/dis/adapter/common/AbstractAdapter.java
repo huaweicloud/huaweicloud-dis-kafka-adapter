@@ -18,10 +18,11 @@ package com.huaweicloud.dis.adapter.common;
 
 import com.huaweicloud.dis.DISClientAsync;
 import com.huaweicloud.dis.DISConfig;
+import com.huaweicloud.dis.core.DISCredentials;
+import com.huaweicloud.dis.core.builder.DefaultExecutorFactory;
 
 import java.util.Map;
 import java.util.Properties;
-import java.util.concurrent.Executors;
 
 
 public abstract class AbstractAdapter {
@@ -45,11 +46,20 @@ public abstract class AbstractAdapter {
     public AbstractAdapter(DISConfig disConfig) {
         this.config = disConfig;
         // init DIS async client
-        this.disAsync = new DISClientAsync(disConfig, Executors.newFixedThreadPool(getThreadPoolSize()));
+        this.disAsync = new DISClientAsync(disConfig, new DefaultExecutorFactory(getThreadPoolSize()).newExecutor());
     }
 
     public void close() {
         this.disAsync.close();
+    }
+
+    /**
+     * Update DIS credentials, such as ak/sk/securityToken
+     *
+     * @param credentials new credentials
+     */
+    public void updateCredentials(DISCredentials credentials) {
+        this.disAsync.updateCredentials(credentials);
     }
 
     protected abstract int getThreadPoolSize();

@@ -21,7 +21,9 @@ import com.huaweicloud.dis.adapter.common.Utils;
 import com.huaweicloud.dis.adapter.common.model.DisProducerRecord;
 import com.huaweicloud.dis.adapter.common.model.ProduceCallback;
 import com.huaweicloud.dis.adapter.common.producer.DISProducer;
+import com.huaweicloud.dis.adapter.common.producer.DisProducerConfig;
 import com.huaweicloud.dis.adapter.common.producer.IDISProducer;
+import com.huaweicloud.dis.core.DISCredentials;
 import com.huaweicloud.dis.core.util.StringUtils;
 import com.huaweicloud.dis.iface.data.response.PutRecordsResult;
 import com.huaweicloud.dis.iface.data.response.PutRecordsResultEntry;
@@ -91,7 +93,7 @@ public class DISKafkaProducer<K, V> implements Producer<K, V> {
 
         if (keySerializer == null) {
             Class keySerializerClass = StringSerializer.class;
-            String className = (String) disConfig.get("key.serializer");
+            String className = (String) disConfig.get(DisProducerConfig.KEY_SERIALIZER_CLASS_CONFIG);
             if (className != null) {
                 try {
                     keySerializerClass = Class.forName(className);
@@ -108,7 +110,7 @@ public class DISKafkaProducer<K, V> implements Producer<K, V> {
 
         if (valueSerializer == null) {
             Class valueSerializerClass = StringSerializer.class;
-            String className = (String) disConfig.get("value.serializer");
+            String className = (String) disConfig.get(DisProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG);
             if (className != null) {
                 try {
                     valueSerializerClass = Class.forName(className);
@@ -156,8 +158,11 @@ public class DISKafkaProducer<K, V> implements Producer<K, V> {
             produceCallback = new ProduceCallback() {
                 @Override
                 public void onCompletion(PutRecordsResult result, Exception exception) {
-                    RecordMetadata recordMetadata = buildRecordMetadata(stream, result);
-                    callback.onCompletion(recordMetadata, exception);
+                    if (exception == null) {
+                        callback.onCompletion(buildRecordMetadata(stream, result), null);
+                    } else {
+                        callback.onCompletion(null, exception);
+                    }
                 }
             };
         }
@@ -212,12 +217,12 @@ public class DISKafkaProducer<K, V> implements Producer<K, V> {
 
     @Override
     public void close() {
-        this.close(10000L, TimeUnit.MILLISECONDS);
+        this.disProducer.close();
     }
 
     @Override
     public void close(long timeout, TimeUnit unit) {
-        this.disProducer.close();
+        this.disProducer.close(timeout, unit);
     }
 
     private class RecordMetadataFuture implements Future<RecordMetadata> {
@@ -267,4 +272,12 @@ public class DISKafkaProducer<K, V> implements Producer<K, V> {
 
     }
 
+    /**
+     * Update DIS credentials, such as ak/sk/securityToken
+     *
+     * @param credentials new credentials
+     */
+    public void updateCredentials(DISCredentials credentials) {
+        disProducer.updateCredentials(credentials);
+    }
 }

@@ -60,9 +60,6 @@ public class DisOffsetAndMetadata implements Serializable {
 
     @Override
     public String toString() {
-        return "DisOffsetAndMetadata{" +
-                "offset=" + offset +
-                ", metadata='" + metadata + '\'' +
-                '}';
+        return "{offset=" + offset + ", metadata='" + metadata + "'}";
     }
 }
