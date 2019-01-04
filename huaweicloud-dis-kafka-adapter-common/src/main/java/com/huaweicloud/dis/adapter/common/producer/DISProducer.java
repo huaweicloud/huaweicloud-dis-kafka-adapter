@@ -115,12 +115,12 @@ public class DISProducer extends AbstractAdapter implements IDISProducer {
 
     @Override
     public void close() {
-        this.close(10000L, TimeUnit.MILLISECONDS);
+        this.producer.close();
     }
 
     @Override
     public void close(long timeout, TimeUnit unit) {
-        this.producer.close();
+        this.producer.close(timeout, unit);
     }
 
     @Override

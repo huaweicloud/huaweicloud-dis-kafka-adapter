@@ -219,12 +219,12 @@ public class DISKafkaProducer<K, V> implements Producer<K, V> {
 
     @Override
     public void close() {
-        this.close(10000L, TimeUnit.MILLISECONDS);
+        this.disProducer.close();
     }
 
     @Override
     public void close(long timeout, TimeUnit unit) {
-        this.disProducer.close();
+        this.disProducer.close(timeout, unit);
     }
 
     private class RecordMetadataFuture implements Future<RecordMetadata> {

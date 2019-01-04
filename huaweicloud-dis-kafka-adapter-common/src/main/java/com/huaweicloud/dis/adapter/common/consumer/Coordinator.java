@@ -16,9 +16,9 @@
 
 package com.huaweicloud.dis.adapter.common.consumer;
 
+import com.huaweicloud.dis.Constants;
 import com.huaweicloud.dis.DISAsync;
 import com.huaweicloud.dis.DISConfig;
-import com.huaweicloud.dis.adapter.common.Constants;
 import com.huaweicloud.dis.adapter.common.Utils;
 import com.huaweicloud.dis.adapter.common.model.ClientState;
 import com.huaweicloud.dis.adapter.common.model.DisOffsetAndMetadata;
@@ -44,14 +44,28 @@ import com.huaweicloud.dis.iface.data.response.GetPartitionCursorResult;
 import com.huaweicloud.dis.iface.stream.request.DescribeStreamRequest;
 import com.huaweicloud.dis.iface.stream.response.DescribeStreamResult;
 import com.huaweicloud.dis.iface.stream.response.PartitionResult;
+import com.huaweicloud.dis.util.CheckpointTypeEnum;
 import com.huaweicloud.dis.util.JsonUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.DelayQueue;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
@@ -88,6 +102,15 @@ public class Coordinator {
 
     private DelayQueue<DelayedTask> delayedTasks;
 
+    private ArrayBlockingQueue<AsyncCommitOffsetObj> asyncCommitOffsetQueue = new ArrayBlockingQueue<>(100);
+
+    public volatile boolean isAsyncCommitting = false;
+
+    /**
+     * 异步offset提交线程
+     */
+    private ExecutorService asyncCommitOffsetExecutor;
+
     public Coordinator(DISAsync disAsync,
                        String clientId,
                        String groupId,
@@ -105,11 +128,21 @@ public class Coordinator {
         this.autoCommitEnabled = autoCommitEnabled;
         this.subscriptions = subscriptions;
         this.nextIterators = nextIterators;
-        delayedTasks = new DelayQueue<>();
-        delayedTasks.add(new AutoCreateAppTask(0));
-        delayedTasks.add(new HeartbeatDelayedRequest(0L));
+        this.asyncCommitOffsetExecutor = Executors.newSingleThreadExecutor(new ThreadFactory() {
+            @Override
+            public Thread newThread(Runnable r) {
+                Thread thread = Executors.defaultThreadFactory().newThread(r);
+                thread.setName("async-commit-task");
+                thread.setDaemon(true);
+                return thread;
+            }
+        });
+        this.asyncCommitOffsetExecutor.submit(new AsyncCommitOffsetThread());
+        this.delayedTasks = new DelayQueue<>();
+        this.delayedTasks.add(new AutoCreateAppTask(0));
+        this.delayedTasks.add(new HeartbeatDelayedRequest(0L));
         if (this.autoCommitEnabled) {
-            delayedTasks.add(new AutoCommitTask(3000L, autoCommitIntervalMs));
+            this.delayedTasks.add(new AutoCommitTask(System.currentTimeMillis() + autoCommitIntervalMs, autoCommitIntervalMs));
         }
     }
 
@@ -195,6 +228,8 @@ public class Coordinator {
     private class AutoCommitTask extends DelayedTask {
         private long nextCommitTimeMs = 10000L; //10s
 
+        private Map<StreamPartition, DisOffsetAndMetadata> lastCommittedOffsets = null;
+
         public AutoCommitTask(long startTimeMs, long nextCommitTimeMs) {
             super(startTimeMs);
             this.nextCommitTimeMs = nextCommitTimeMs;
@@ -208,12 +243,32 @@ public class Coordinator {
         @Override
         void doRequest() {
             if (!subscriptions.assignedPartitions().isEmpty()) {
-                commitAsync(subscriptions.allConsumed(), new DisOffsetCommitCallback() {
-                    @Override
-                    public void onComplete(Map<StreamPartition, DisOffsetAndMetadata> map, Exception e) {
+                Map<StreamPartition, DisOffsetAndMetadata> newOffsets = subscriptions.allConsumed();
+                // no need to commit if no new offsets
+                if (!newOffsets.equals(lastCommittedOffsets)) {
+                    try {
+                        asyncCommitOffsetQueue.put(new AsyncCommitOffsetObj(subscriptions.allConsumed(), new DisOffsetCommitCallback() {
+                            @Override
+                            public void onComplete(Map<StreamPartition, DisOffsetAndMetadata> offsets, Exception e) {
+                                if (e != null) {
+                                    log.error("Failed to commit offsets automatically, offsets [{}], errorInfo [{}]", offsets, e.getMessage(), e);
+                                }
+                                else
+                                {
+                                    log.debug("Success to commit offsets automatically, offsets [{}]", offsets);
+                                    lastCommittedOffsets = offsets;
+                                }
+                                reschedule();
+                            }
+                        }));
+                    } catch (InterruptedException e) {
                         reschedule();
+                        log.error(e.getMessage(), e);
                     }
-                });
+                } else {
+                    reschedule();
+                    log.debug("No new offsets need to be committed, last committed : [{}]", newOffsets);
+                }
             } else {
                 reschedule();
             }
@@ -234,17 +289,19 @@ public class Coordinator {
             if (!StringUtils.isNullOrEmpty(groupId)) {
                 try {
                     disAsync.describeApp(groupId);
-                } catch (DISClientException e) {
-                    if (e.getMessage() == null || !e.getMessage().contains(Constants.ERROR_CODE_APP_NAME_NOT_FOUND)) {
-                        throw e;
+                } catch (DISClientException describeException) {
+                    if (describeException.getMessage() == null
+                            || !describeException.getMessage().contains(Constants.ERROR_CODE_APP_NAME_NOT_EXISTS)) {
+                        throw describeException;
                     }
                     try {
                         // app not exist, create
                         disAsync.createApp(groupId);
-                        log.info("App {} not exist and create successful.", groupId);
+                        log.info("App [{}] does not exist and created successfully.", groupId);
                     } catch (DISClientException createException) {
-                        if (createException.getMessage() == null || !createException.getMessage().contains(Constants.ERROR_CODE_APP_NAME_EXIST)) {
-                            log.error("App {} not exist and create failed.", groupId);
+                        if (createException.getMessage() == null
+                                || !createException.getMessage().contains(Constants.ERROR_CODE_APP_NAME_EXISTS)) {
+                            log.error("App {} does not exist and created unsuccessfully. {}", groupId, createException.getMessage());
                             throw createException;
                         }
                     }
@@ -293,7 +350,7 @@ public class Coordinator {
                 doJoinGroup();
                 break;
             case ERR_SUBSCRIPTION:
-                log.error("[JOIN] Failed to join group, stream [{}] may be not exist", joinGroupRequest.getInterestedStream());
+                log.error("[JOIN] Failed to join group, stream {} may be not exist", joinGroupRequest.getInterestedStream());
                 throw new IllegalArgumentException("Failed to join group, stream ["
                         + joinGroupRequest.getInterestedStream() + "] may be not exist");
             case GROUP_NOT_EXIST:
@@ -370,12 +427,11 @@ public class Coordinator {
         subscriptions.assignFromSubscribed(partitionsAssignment);
     }
 
-
     public void commitSync(Map<StreamPartition, DisOffsetAndMetadata> offsets) {
-        commit(offsets, null, true);
+        commit(offsets, null);
     }
 
-    public void commit(Map<StreamPartition, DisOffsetAndMetadata> offsets, DisOffsetCommitCallback callback, boolean isSync) {
+    public void commit(Map<StreamPartition, DisOffsetAndMetadata> offsets, DisOffsetCommitCallback callback) {
         if (StringUtils.isNullOrEmpty(this.groupId)) {
             throw new IllegalStateException("groupId not defined, checkpoint not commit");
         }
@@ -390,7 +446,7 @@ public class Coordinator {
         final AtomicBoolean lock = new AtomicBoolean(false);
         for (Map.Entry<StreamPartition, DisOffsetAndMetadata> offset : offsets.entrySet()) {
             CommitCheckpointRequest commitCheckpointRequest = new CommitCheckpointRequest();
-            commitCheckpointRequest.setCheckpointType(Constants.CHECKPOINT_LAST_READ);
+            commitCheckpointRequest.setCheckpointType(CheckpointTypeEnum.LAST_READ.name());
             commitCheckpointRequest.setSequenceNumber(String.valueOf(offset.getValue().offset()));
             commitCheckpointRequest.setAppName(groupId);
             commitCheckpointRequest.setMetadata(offset.getValue().metadata());
@@ -399,9 +455,10 @@ public class Coordinator {
             disAsync.commitCheckpointAsync(commitCheckpointRequest, new AsyncHandler<CommitCheckpointResult>() {
                 @Override
                 public void onError(Exception exception) {
-                    countDownLatch.countDown();
                     exceptionAtomicReference.set(exception);
-                    log.error(exception.getMessage(), exception);
+                    countDownLatch.countDown();
+                    log.error("Failed to commitCheckpointAsync, error : [{}], request : [{}]",
+                            exception.getMessage(), JsonUtils.objToJson(commitCheckpointRequest));
 
                     if (callback != null) {
                         try {
@@ -438,26 +495,20 @@ public class Coordinator {
             });
         }
 
-        if (isSync) {
-            try {
-                countDownLatch.await();
-            } catch (InterruptedException e) {
-                log.error(e.getMessage(), e);
-            }
-
-            Exception e = exceptionAtomicReference.get();
-            if (e != null) {
-                if (e instanceof RuntimeException) {
-                    throw (RuntimeException) e;
-                } else {
-                    throw new RuntimeException(e);
-                }
-            }
+        try {
+            countDownLatch.await();
+        } catch (InterruptedException e) {
+            log.error(e.getMessage(), e);
         }
+        handleError(exceptionAtomicReference);
     }
 
     public void commitAsync(Map<StreamPartition, DisOffsetAndMetadata> offsets, DisOffsetCommitCallback callback) {
-        commit(offsets, callback, false);
+        try {
+            asyncCommitOffsetQueue.put(new AsyncCommitOffsetObj(offsets, callback));
+        } catch (InterruptedException e) {
+            log.error(e.getMessage(), e);
+        }
     }
 
     public void executeDelayedTask() {
@@ -469,7 +520,6 @@ public class Coordinator {
         } catch (InterruptedException e) {
             log.error(e.getMessage(), e);
         }
-
     }
 
     private void addPartition(Map<String, List<Integer>> describeTopic, StreamPartition part) {
@@ -650,19 +700,22 @@ public class Coordinator {
     }
 
     public Map<StreamPartition, DisOffsetAndMetadata> fetchCommittedOffsets(Set<StreamPartition> partitions) {
+        final AtomicReference<Exception> exceptionAtomicReference = new AtomicReference<>();
         final CountDownLatch countDownLatch = new CountDownLatch(partitions.size());
-        final Map<StreamPartition, DisOffsetAndMetadata> offsets = new HashMap<>();
+        final Map<StreamPartition, DisOffsetAndMetadata> offsets = new ConcurrentHashMap<>();
         for (StreamPartition partition : partitions) {
             GetCheckpointRequest getCheckpointRequest = new GetCheckpointRequest();
             getCheckpointRequest.setStreamName(partition.stream());
             getCheckpointRequest.setAppName(groupId);
-            getCheckpointRequest.setCheckpointType(Constants.CHECKPOINT_LAST_READ);
+            getCheckpointRequest.setCheckpointType(CheckpointTypeEnum.LAST_READ.name());
             getCheckpointRequest.setPartitionId(Utils.getShardIdStringFromPartitionId(partition.partition()));
             disAsync.getCheckpointAsync(getCheckpointRequest, new AsyncHandler<GetCheckpointResult>() {
                 @Override
                 public void onError(Exception e) {
+                    exceptionAtomicReference.set(e);
                     countDownLatch.countDown();
-                    log.error("Failed to getCheckpoint : {}", e.getMessage(), e);
+                    log.error("Failed to getCheckpointAsync, error : [{}], request : [{}]",
+                            e.getMessage(), JsonUtils.objToJson(getCheckpointRequest));
                 }
 
                 @Override
@@ -678,6 +731,7 @@ public class Coordinator {
                                     new DisOffsetAndMetadata(Long.valueOf(getCheckpointResult.getSequenceNumber()),
                                             getCheckpointResult.getMetadata()));
                         }
+                        log.debug("{} get checkpoint {} ", partition, getCheckpointResult.getSequenceNumber());
                     } finally {
                         countDownLatch.countDown();
                     }
@@ -689,6 +743,9 @@ public class Coordinator {
         } catch (InterruptedException e) {
             log.error(e.getMessage(), e);
         }
+
+        handleError(exceptionAtomicReference);
+
         return offsets;
     }
 
@@ -703,60 +760,84 @@ public class Coordinator {
         }
     }
 
+    public void seek(final Set<StreamPartition> streamPartitions) {
+        final AtomicReference<Exception> exceptionReference = new AtomicReference<>();
+        final CountDownLatch countDownLatch = new CountDownLatch(streamPartitions.size());
+        for (StreamPartition partition : streamPartitions) {
+            final String startingSequenceNumber = String.valueOf(subscriptions.position(partition));
+            final GetPartitionCursorRequest getShardIteratorParam = new GetPartitionCursorRequest();
+            getShardIteratorParam.setPartitionId(Utils.getShardIdStringFromPartitionId(partition.partition()));
+            getShardIteratorParam.setStartingSequenceNumber(startingSequenceNumber);
+            getShardIteratorParam.setStreamName(partition.stream());
 
-    public void seek(final StreamPartition partition, CountDownLatch countDownLatch) {
-        final String startingSequenceNumber = String.valueOf(subscriptions.position(partition));
-        final GetPartitionCursorRequest getShardIteratorParam = new GetPartitionCursorRequest();
-        getShardIteratorParam.setPartitionId(Utils.getShardIdStringFromPartitionId(partition.partition()));
-        getShardIteratorParam.setStartingSequenceNumber(startingSequenceNumber);
-        getShardIteratorParam.setStreamName(partition.stream());
-        disAsync.getPartitionCursorAsync(getShardIteratorParam, new AsyncHandler<GetPartitionCursorResult>() {
-            @Override
-            public void onError(Exception exception) {
-                // handle "Sequence_number out of range"
-                if (exception.getMessage().contains("DIS.4224")) {
-                    int start = exception.getMessage().indexOf("Sequence_number");
-                    final String message;
-                    if (start > -1) {
-                        message = exception.getMessage().substring(start, exception.getMessage().length() - 2);
-                    } else {
-                        message = exception.getMessage();
-                    }
-                    // special treat for out of range partition
-                    subscriptions.needOffsetReset(partition);
-                    resetOffset(partition);
-                    String newStartingSequenceNumber = String.valueOf(subscriptions.position(partition));
-                    getShardIteratorParam.setStartingSequenceNumber(newStartingSequenceNumber);
-                    disAsync.getPartitionCursorAsync(getShardIteratorParam, new AsyncHandler<GetPartitionCursorResult>() {
-                        @Override
-                        public void onError(Exception exception) {
-                            log.error(exception.getMessage(), exception);
-                            countDownLatch.countDown();
-                        }
-
-                        @Override
-                        public void onSuccess(GetPartitionCursorResult getPartitionCursorResult) {
-                            log.warn("{} {}, so reset to [{}].", partition, message, newStartingSequenceNumber);
-                            if (!StringUtils.isNullOrEmpty(getPartitionCursorResult.getPartitionCursor())) {
-                                nextIterators.put(partition, new PartitionCursor(getPartitionCursorResult.getPartitionCursor()));
+            disAsync.getPartitionCursorAsync(getShardIteratorParam, new AsyncHandler<GetPartitionCursorResult>() {
+                @Override
+                public void onError(Exception exception) {
+                    // handle "Sequence_number out of range"
+                    if (exception.getMessage().contains(Constants.ERROR_CODE_SEQUENCE_NUMBER_OUT_OF_RANGE)) {
+                        try {
+                            int start = exception.getMessage().indexOf(Constants.ERROR_INFO_SEQUENCE_NUMBER_OUT_OF_RANGE);
+                            final String message;
+                            if (start > -1) {
+                                message = exception.getMessage().substring(start, exception.getMessage().length() - 2);
                             } else {
-                                requestRebalance();
+                                message = exception.getMessage();
                             }
-                            countDownLatch.countDown();
-                        }
-                    });
-                } else {
-                    log.error(exception.getMessage(), exception);
-                    countDownLatch.countDown();
-                }
-            }
+                            // special treat for out of range partition
+                            subscriptions.needOffsetReset(partition);
+                            resetOffset(partition);
+                            String newStartingSequenceNumber = String.valueOf(subscriptions.position(partition));
+                            getShardIteratorParam.setStartingSequenceNumber(newStartingSequenceNumber);
+                            disAsync.getPartitionCursorAsync(getShardIteratorParam, new AsyncHandler<GetPartitionCursorResult>() {
+                                @Override
+                                public void onError(Exception newException) {
+                                    exceptionReference.set(newException);
+                                    countDownLatch.countDown();
+                                    log.error("Failed to getPartitionCursorAsync, error : [{}], request : [{}]",
+                                            newException.getMessage(), JsonUtils.objToJson(getShardIteratorParam));
+                                }
 
-            @Override
-            public void onSuccess(GetPartitionCursorResult getPartitionCursorResult) {
-                nextIterators.put(partition, new PartitionCursor(getPartitionCursorResult.getPartitionCursor()));
-                countDownLatch.countDown();
-            }
-        });
+                                @Override
+                                public void onSuccess(GetPartitionCursorResult getPartitionCursorResult) {
+                                    if (!StringUtils.isNullOrEmpty(getPartitionCursorResult.getPartitionCursor())) {
+                                        nextIterators.put(partition, new PartitionCursor(getPartitionCursorResult.getPartitionCursor()));
+                                    } else {
+                                        requestRebalance();
+                                    }
+                                    countDownLatch.countDown();
+                                    log.warn("{} {}, will starts from sequenceNumber {}.", partition, message, newStartingSequenceNumber);
+                                }
+                            });
+                        } catch (Exception newException) {
+                            exceptionReference.set(newException);
+                            countDownLatch.countDown();
+                            log.error("Failed to resetOffset, error : [{}], request : [{}]",
+                                    newException.getMessage(), JsonUtils.objToJson(getShardIteratorParam));
+                        }
+                    } else {
+                        exceptionReference.set(exception);
+                        countDownLatch.countDown();
+                        log.error("Failed to getPartitionCursorAsync, error : [{}], request : [{}]",
+                                exception.getMessage(), JsonUtils.objToJson(getShardIteratorParam));
+                    }
+                }
+
+                @Override
+                public void onSuccess(GetPartitionCursorResult getPartitionCursorResult) {
+                    nextIterators.put(partition, new PartitionCursor(getPartitionCursorResult.getPartitionCursor()));
+                    countDownLatch.countDown();
+                    log.debug("{} will starts from sequenceNumber {}.", partition, startingSequenceNumber);
+                }
+            });
+        }
+
+        try {
+            countDownLatch.await();
+        } catch (InterruptedException e) {
+            log.error(e.getMessage(), e);
+        }
+
+        handleError(exceptionReference);
     }
 
     public boolean ensureGroupStable() {
@@ -782,6 +863,19 @@ public class Coordinator {
         generation.set(DEFAULT_GENERATION);
     }
 
+    private void handleError(AtomicReference<Exception> exceptionAtomicReference) {
+        if (exceptionAtomicReference != null) {
+            Exception e = exceptionAtomicReference.get();
+            if (e != null) {
+                if (e instanceof DISClientException) {
+                    throw (DISClientException) e;
+                } else {
+                    throw new DISClientException(e);
+                }
+            }
+        }
+    }
+
     /**
      * Update DIS credentials, such as ak/sk/securityToken
      *
@@ -789,5 +883,61 @@ public class Coordinator {
      */
     public void updateInnerClientCredentials(DISCredentials credentials) {
         innerDISClient.updateCredentials(credentials);
+    }
+
+    private class AsyncCommitOffsetObj {
+        private Map<StreamPartition, DisOffsetAndMetadata> offsets;
+        private DisOffsetCommitCallback callback;
+
+        public AsyncCommitOffsetObj(Map<StreamPartition, DisOffsetAndMetadata> offsets, DisOffsetCommitCallback callback) {
+            this.offsets = offsets;
+            this.callback = callback;
+        }
+    }
+
+    private class AsyncCommitOffsetThread implements Runnable {
+        @Override
+        public void run() {
+            while (true) {
+                try {
+                    // async commit should be in queue
+                    AsyncCommitOffsetObj asyncCommitOffsetObj = asyncCommitOffsetQueue.take();
+                    if (asyncCommitOffsetObj.offsets.size() > 0) {
+                        isAsyncCommitting = true;
+                        int remainingSize = asyncCommitOffsetQueue.size();
+                        if (remainingSize > 0) {
+                            log.debug("The number of offsets waiting to be submitted in the queue is {}.", remainingSize);
+                        }
+                        try {
+                            commit(asyncCommitOffsetObj.offsets, asyncCommitOffsetObj.callback);
+                        } finally {
+                            isAsyncCommitting = false;
+                        }
+                    }
+                } catch (DISClientException | InterruptedException ignored) {
+                } catch (Exception e) {
+                    log.error(e.getMessage(), e);
+                }
+            }
+        }
+    }
+
+    public void close() {
+        long start = System.currentTimeMillis();
+        int loop = 0;
+        while (loop < 3) {
+            if ((System.currentTimeMillis() - start) >= 5000) {
+                break;
+            }
+            if (isAsyncCommitting || asyncCommitOffsetQueue.size() > 0) {
+                loop = 0;
+            } else {
+                loop++;
+            }
+            Utils.sleep(5);
+        }
+        if (asyncCommitOffsetExecutor != null) {
+            asyncCommitOffsetExecutor.shutdownNow();
+        }
     }
 }

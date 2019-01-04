@@ -23,11 +23,17 @@ public class DisProducerConfig extends DISConfig {
 
     public static final String BATCH_SIZE_CONFIG = DISConfig.PROPERTY_PRODUCER_BATCH_SIZE;
 
+    public static final String BUFFER_MEMORY_CONFIG = DISConfig.PROPERTY_PRODUCER_BUFFER_MEMORY;
+
+    public static final String BATCH_COUNT_CONFIG = DISConfig.PROPERTY_PRODUCER_BATCH_COUNT;
+
+    public static final String BUFFER_COUNT_CONFIG = DISConfig.PROPERTY_PRODUCER_BUFFER_COUNT;
+
+    public static final String BLOCK_ON_BUFFER_FULL_CONFIG = DISConfig.PROPERTY_PRODUCER_BLOCK_ON_BUFFER_FULL;
+
     public static final String LINGER_MS_CONFIG = DISConfig.PROPERTY_PRODUCER_LINGER_MS;
 
     public static final String MAX_BLOCK_MS_CONFIG = DISConfig.PROPERTY_PRODUCER_MAX_BLOCK_MS;
-
-    public static final String BUFFER_MEMORY_CONFIG = DISConfig.PROPERTY_PRODUCER_BUFFER_MEMORY;
 
     public static final String MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION = DISConfig.PROPERTY_MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION;
 
