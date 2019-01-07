@@ -55,6 +55,7 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -102,7 +103,7 @@ public class Coordinator {
 
     private DelayQueue<DelayedTask> delayedTasks;
 
-    private ArrayBlockingQueue<AsyncCommitOffsetObj> asyncCommitOffsetQueue = new ArrayBlockingQueue<>(100);
+    private ArrayBlockingQueue<CommitOffsetThunk> asyncCommitOffsetQueue = new ArrayBlockingQueue<>(1000);
 
     public volatile boolean isAsyncCommitting = false;
 
@@ -245,16 +246,14 @@ public class Coordinator {
             if (!subscriptions.assignedPartitions().isEmpty()) {
                 Map<StreamPartition, DisOffsetAndMetadata> newOffsets = subscriptions.allConsumed();
                 // no need to commit if no new offsets
-                if (!newOffsets.equals(lastCommittedOffsets)) {
+                if (newOffsets.size() > 0 && !newOffsets.equals(lastCommittedOffsets)) {
                     try {
-                        asyncCommitOffsetQueue.put(new AsyncCommitOffsetObj(subscriptions.allConsumed(), new DisOffsetCommitCallback() {
+                        asyncCommitOffsetQueue.put(new CommitOffsetThunk(subscriptions.allConsumed(), new DisOffsetCommitCallback() {
                             @Override
                             public void onComplete(Map<StreamPartition, DisOffsetAndMetadata> offsets, Exception e) {
                                 if (e != null) {
                                     log.error("Failed to commit offsets automatically, offsets [{}], errorInfo [{}]", offsets, e.getMessage(), e);
-                                }
-                                else
-                                {
+                                } else {
                                     log.debug("Success to commit offsets automatically, offsets [{}]", offsets);
                                     lastCommittedOffsets = offsets;
                                 }
@@ -428,13 +427,27 @@ public class Coordinator {
     }
 
     public void commitSync(Map<StreamPartition, DisOffsetAndMetadata> offsets) {
-        commit(offsets, null);
+        commit(Collections.singletonList(new CommitOffsetThunk(offsets, null)));
     }
 
-    public void commit(Map<StreamPartition, DisOffsetAndMetadata> offsets, DisOffsetCommitCallback callback) {
+    public void commit(List<CommitOffsetThunk> asyncCommitOffsetObjList) {
+        if (asyncCommitOffsetObjList.size() == 0) {
+            return;
+        }
+
         if (StringUtils.isNullOrEmpty(this.groupId)) {
             throw new IllegalStateException("groupId not defined, checkpoint not commit");
         }
+
+        Map<StreamPartition, DisOffsetAndMetadata> offsets = new HashMap<>();
+        for (CommitOffsetThunk asyncCommitOffsetObj : asyncCommitOffsetObjList) {
+            offsets.putAll(asyncCommitOffsetObj.offsets);
+        }
+
+        if (offsets.size() == 0) {
+            return;
+        }
+
         for (Map.Entry<StreamPartition, DisOffsetAndMetadata> offset : offsets.entrySet()) {
             if (!subscriptions.isAssigned(offset.getKey())) {
                 throw new IllegalStateException(offset.getKey().toString() + " is not assigned!");
@@ -460,14 +473,16 @@ public class Coordinator {
                     log.error("Failed to commitCheckpointAsync, error : [{}], request : [{}]",
                             exception.getMessage(), JsonUtils.objToJson(commitCheckpointRequest));
 
-                    if (callback != null) {
-                        try {
-                            countDownLatch.await();
-                        } catch (InterruptedException ignored) {
-                        }
+                    try {
+                        countDownLatch.await();
+                    } catch (InterruptedException ignored) {
+                    }
 
-                        if (lock.compareAndSet(false, true)) {
-                            callback.onComplete(offsets, exceptionAtomicReference.get());
+                    if (lock.compareAndSet(false, true)) {
+                        for (CommitOffsetThunk asyncCommitOffsetObj : asyncCommitOffsetObjList) {
+                            if (asyncCommitOffsetObj.callback != null) {
+                                asyncCommitOffsetObj.callback.onComplete(asyncCommitOffsetObj.offsets, exceptionAtomicReference.get());
+                            }
                         }
                     }
                 }
@@ -478,16 +493,18 @@ public class Coordinator {
                         subscriptions.committed(offset.getKey(), offset.getValue());
                     }
                     countDownLatch.countDown();
+                    log.debug("Success to commitCheckpointAsync, {} : {}", offset.getKey(), offset.getValue());
+                    try {
+                        countDownLatch.await();
+                    } catch (InterruptedException ignored) {
+                    }
 
-                    if (callback != null) {
-                        try {
-                            countDownLatch.await();
-                        } catch (InterruptedException ignored) {
-                        }
-
-                        if (exceptionAtomicReference.get() == null) {
-                            if (lock.compareAndSet(false, true)) {
-                                callback.onComplete(offsets, null);
+                    if (exceptionAtomicReference.get() == null) {
+                        if (lock.compareAndSet(false, true)) {
+                            for (CommitOffsetThunk asyncCommitOffsetObj : asyncCommitOffsetObjList) {
+                                if (asyncCommitOffsetObj.callback != null) {
+                                    asyncCommitOffsetObj.callback.onComplete(asyncCommitOffsetObj.offsets, null);
+                                }
                             }
                         }
                     }
@@ -505,7 +522,7 @@ public class Coordinator {
 
     public void commitAsync(Map<StreamPartition, DisOffsetAndMetadata> offsets, DisOffsetCommitCallback callback) {
         try {
-            asyncCommitOffsetQueue.put(new AsyncCommitOffsetObj(offsets, callback));
+            asyncCommitOffsetQueue.put(new CommitOffsetThunk(offsets, callback));
         } catch (InterruptedException e) {
             log.error(e.getMessage(), e);
         }
@@ -885,11 +902,14 @@ public class Coordinator {
         innerDISClient.updateCredentials(credentials);
     }
 
-    private class AsyncCommitOffsetObj {
+    private class CommitOffsetThunk {
         private Map<StreamPartition, DisOffsetAndMetadata> offsets;
         private DisOffsetCommitCallback callback;
 
-        public AsyncCommitOffsetObj(Map<StreamPartition, DisOffsetAndMetadata> offsets, DisOffsetCommitCallback callback) {
+        public CommitOffsetThunk(Map<StreamPartition, DisOffsetAndMetadata> offsets, DisOffsetCommitCallback callback) {
+            if (offsets == null) {
+                throw new IllegalArgumentException("offsets can not be null");
+            }
             this.offsets = offsets;
             this.callback = callback;
         }
@@ -901,18 +921,20 @@ public class Coordinator {
             while (true) {
                 try {
                     // async commit should be in queue
-                    AsyncCommitOffsetObj asyncCommitOffsetObj = asyncCommitOffsetQueue.take();
-                    if (asyncCommitOffsetObj.offsets.size() > 0) {
-                        isAsyncCommitting = true;
-                        int remainingSize = asyncCommitOffsetQueue.size();
-                        if (remainingSize > 0) {
-                            log.debug("The number of offsets waiting to be submitted in the queue is {}.", remainingSize);
-                        }
-                        try {
-                            commit(asyncCommitOffsetObj.offsets, asyncCommitOffsetObj.callback);
-                        } finally {
-                            isAsyncCommitting = false;
-                        }
+                    CommitOffsetThunk commitOffsetThunk = asyncCommitOffsetQueue.take();
+                    isAsyncCommitting = true;
+                    List<CommitOffsetThunk> commitOffsetThunkList = new LinkedList<>();
+                    commitOffsetThunkList.add(commitOffsetThunk);
+                    // get all
+                    asyncCommitOffsetQueue.drainTo(commitOffsetThunkList);
+                    int remainingSize = asyncCommitOffsetQueue.size();
+                    if (remainingSize > 0) {
+                        log.debug("The number of offsets waiting to be submitted in the queue is {}.", remainingSize);
+                    }
+                    try {
+                        commit(commitOffsetThunkList);
+                    } finally {
+                        isAsyncCommitting = false;
                     }
                 } catch (DISClientException | InterruptedException ignored) {
                 } catch (Exception e) {
