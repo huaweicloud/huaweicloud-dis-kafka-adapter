@@ -17,6 +17,7 @@
 package com.huaweicloud.dis.adapter.common.consumer;
 
 import com.huaweicloud.dis.DISAsync;
+import com.huaweicloud.dis.adapter.common.Utils;
 import com.huaweicloud.dis.adapter.common.model.StreamPartition;
 import com.huaweicloud.dis.core.handler.AsyncHandler;
 import com.huaweicloud.dis.exception.DISClientException;
@@ -80,6 +81,18 @@ public class Fetcher {
             if (!subscriptions.isPaused(partition)) {
                 if (nextIterators.get(partition) == null || nextIterators.get(partition).isExpire()) {
                     needUpdateOffset.add(partition);
+                    // delete response from future when position reset. but lead to more poll() costs.
+                    Future<GetRecordsResult> getRecordsResultFuture = futures.get(partition);
+                    if (getRecordsResultFuture != null) {
+                        while (!getRecordsResultFuture.isDone() && !forceWakeup) {
+                            Utils.sleep(1);
+                        }
+
+                        if (getRecordsResultFuture.isDone()) {
+                            futures.remove(partition);
+                            receivedCnt.decrementAndGet();
+                        }
+                    }
                 }
             }
         }
