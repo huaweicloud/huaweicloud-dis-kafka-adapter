@@ -35,6 +35,4 @@ public class DisConsumerConfig extends DISConfig {
     public static final String VALUE_DESERIALIZER_CLASS_CONFIG = "value.deserializer";
 
     public static final String MAX_FETCH_THREADS_CONFIG = "max.fetch.threads";
-
-    public static final String MAX_PARTITION_FETCH_RECORDS_CONFIG = "max.partition.fetch.records";
 }

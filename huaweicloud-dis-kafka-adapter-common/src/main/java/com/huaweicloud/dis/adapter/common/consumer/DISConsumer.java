@@ -91,7 +91,7 @@ public class DISConsumer extends AbstractAdapter implements IDISConsumer {
                 this.nextIterators,
                 disConfig);
         this.fetcher = new Fetcher(this.disAsync,
-                disConfig.getInt(DisConsumerConfig.MAX_PARTITION_FETCH_RECORDS_CONFIG, 1000),
+                this.config,
                 this.subscriptions,
                 this.coordinator,
                 this.nextIterators);
