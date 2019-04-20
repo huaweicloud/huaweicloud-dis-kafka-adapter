@@ -17,6 +17,7 @@
 package com.huaweicloud.dis.adapter.common.consumer;
 
 import com.huaweicloud.dis.DISAsync;
+import com.huaweicloud.dis.DISConfig;
 import com.huaweicloud.dis.adapter.common.Utils;
 import com.huaweicloud.dis.adapter.common.model.StreamPartition;
 import com.huaweicloud.dis.core.handler.AsyncHandler;
@@ -40,6 +41,8 @@ public class Fetcher {
 
     private static final Logger log = LoggerFactory.getLogger(Fetcher.class);
 
+    private DISConfig disConfig;
+
     private DISAsync disAsync;
 
     private ConcurrentHashMap<StreamPartition, PartitionCursor> nextIterators;
@@ -52,17 +55,15 @@ public class Fetcher {
 
     private Coordinator coordinator;
 
-    private int maxPartitionFetchRecords;
-
     private volatile boolean forceWakeup = false;
 
-    private final Map<StreamPartition, Integer> partitionException = new HashMap<>();
+    private final Map<StreamPartition, Integer> partitionException = new ConcurrentHashMap<>();
 
     private DISClientException exception = null;
 
-    public Fetcher(DISAsync disAsync, int maxPartitionFetchRecords, SubscriptionState subscriptions,
+    public Fetcher(DISAsync disAsync, DISConfig disConfig, SubscriptionState subscriptions,
                    Coordinator coordinator, ConcurrentHashMap<StreamPartition, PartitionCursor> nextIterators) {
-        this.maxPartitionFetchRecords = maxPartitionFetchRecords;
+        this.disConfig = disConfig;
         this.subscriptions = subscriptions;
         this.coordinator = coordinator;
         this.receivedCnt = new AtomicInteger(0);
@@ -108,14 +109,22 @@ public class Fetcher {
                 continue;
             }
             getRecordsParam.setPartitionCursor(nextIterators.get(partition).getNextPartitionCursor());
-            getRecordsParam.setLimit(maxPartitionFetchRecords);
 
             if (futures.get(partition) == null) {
                 futures.put(partition, disAsync.getRecordsAsync(getRecordsParam, new AsyncHandler<GetRecordsResult>() {
                     @Override
                     public void onError(Exception exception) {
+                        Integer errorCount = partitionException.get(partition);
+                        if (errorCount == null) {
+                            errorCount = 0;
+                        }
+
+                        Double sleepTime = 100 * Math.pow(2, errorCount);
+                        sleepTime = sleepTime > disConfig.getBackOffMaxIntervalMs() ? disConfig.getBackOffMaxIntervalMs() : sleepTime;
+                        Utils.sleep(sleepTime.intValue());
+
                         receivedCnt.getAndIncrement();
-                        log.error("Failed to getRecordsAsync, error : [{}], request : [{}]",
+                        log.warn("Failed to getRecordsAsync, error : [{}], request : [{}]",
                                 exception.getMessage(), new String(Base64.getUrlDecoder().decode(getRecordsParam.getPartitionCursor())));
                     }
 
@@ -166,11 +175,11 @@ public class Fetcher {
                             if (cause instanceof DISPartitionNotExistsException || cause instanceof DISPartitionExpiredException) {
                                 // 对于分区不存在/过期异常，可以重试几次看是否恢复
                                 Integer errorCount = partitionException.get(partition);
-                                log.error(cause.getMessage() + ", errorCount {}", (errorCount == null ? 1 : errorCount), cause);
+                                log.warn("Find retriable error {}, errorCount {}", cause.getMessage(), (errorCount == null ? 1 : errorCount));
                                 if (errorCount == null) {
                                     partitionException.put(partition, 2);
-                                } else if (errorCount < 3) {
-                                    // tolerate three times failure
+                                } else if (errorCount < 10) {
+                                    // tolerate N times failure
                                     partitionException.put(partition, (errorCount + 1));
                                 } else {
                                     partitionException.remove(partition);

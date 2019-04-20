@@ -28,6 +28,7 @@ import com.huaweicloud.dis.core.DISCredentials;
 import com.huaweicloud.dis.core.handler.AsyncHandler;
 import com.huaweicloud.dis.core.util.StringUtils;
 import com.huaweicloud.dis.exception.DISClientException;
+import com.huaweicloud.dis.exception.DISPartitionNotExistsException;
 import com.huaweicloud.dis.iface.coordinator.request.HeartbeatRequest;
 import com.huaweicloud.dis.iface.coordinator.request.JoinGroupRequest;
 import com.huaweicloud.dis.iface.coordinator.request.LeaveGroupRequest;
@@ -49,25 +50,8 @@ import com.huaweicloud.dis.util.JsonUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Set;
-import java.util.concurrent.ArrayBlockingQueue;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.DelayQueue;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ThreadFactory;
-import java.util.concurrent.TimeUnit;
+import java.util.*;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
@@ -107,6 +91,11 @@ public class Coordinator {
 
     public volatile boolean isAsyncCommitting = false;
 
+    private Map<String, Integer> oldStreamReadablePartitionCountMap = new ConcurrentHashMap<>();
+
+    private Map<String, Integer> curStreamReadablePartitionCountMap = new ConcurrentHashMap<>();
+
+    boolean enableSubscribeExpandingAdapter = true;
     /**
      * 异步offset提交线程
      */
@@ -145,6 +134,7 @@ public class Coordinator {
         if (this.autoCommitEnabled) {
             this.delayedTasks.add(new AutoCommitTask(System.currentTimeMillis() + autoCommitIntervalMs, autoCommitIntervalMs));
         }
+        this.enableSubscribeExpandingAdapter = Boolean.valueOf(disConfig.get("enable.subscribe.expanding.adapter", "true"));
     }
 
     public boolean isStable() {
@@ -182,14 +172,21 @@ public class Coordinator {
                 delayedTasks.add(this);
             }
 
-            HeartbeatRequest heartbeatRequest = new HeartbeatRequest();
-            heartbeatRequest.setClientId(clintId);
-            heartbeatRequest.setGroupId(groupId);
-            heartbeatRequest.setGeneration(generation.get());
-            HeartbeatResponse heartbeatResponse = innerDISClient.handleHeartbeatRequest(heartbeatRequest);
+            HeartbeatResponse heartbeatResponse;
+            if (state == ClientState.STABLE && generation.get() == -1) {
+                heartbeatResponse = new HeartbeatResponse();
+                heartbeatResponse.setState(HeartbeatResponse.HeartBeatResponseState.JOINING);
+            } else {
+                HeartbeatRequest heartbeatRequest = new HeartbeatRequest();
+                heartbeatRequest.setClientId(clintId);
+                heartbeatRequest.setGroupId(groupId);
+                heartbeatRequest.setGeneration(generation.get());
+                heartbeatResponse = innerDISClient.handleHeartbeatRequest(heartbeatRequest);
+            }
+
             if(state != ClientState.INIT && heartbeatResponse.getState() != HeartbeatResponse.HeartBeatResponseState.STABLE)
             {
-                log.info("Heartbeat response [{}] is abnormal", heartbeatResponse.getState());
+                log.warn("Group [{}] heartbeat response [{}] is abnormal.", groupId, heartbeatResponse.getState());
             }
             //start rebalance
             if (state == ClientState.STABLE && heartbeatResponse.getState() != HeartbeatResponse.HeartBeatResponseState.STABLE) {
@@ -199,6 +196,7 @@ public class Coordinator {
             }
             //assignment completed
             if (state == ClientState.SYNCING && heartbeatResponse.getState() == HeartbeatResponse.HeartBeatResponseState.STABLE) {
+                getSubscribeStreamPartitionCount();
                 updateSubscriptions(assignment);
                 subscriptions.listener().onPartitionsAssigned(subscriptions.assignedPartitions());
                 log.info("Client [{}] success to join group [{}], subscription {}", clintId, groupId, assignment);
@@ -350,8 +348,8 @@ public class Coordinator {
                 break;
             case ERR_SUBSCRIPTION:
                 log.error("[JOIN] Failed to join group, stream {} may be not exist", joinGroupRequest.getInterestedStream());
-                throw new IllegalArgumentException("Failed to join group, stream ["
-                        + joinGroupRequest.getInterestedStream() + "] may be not exist");
+                throw new IllegalArgumentException("Failed to join group, stream "
+                        + joinGroupRequest.getInterestedStream() + " may be not exist");
             case GROUP_NOT_EXIST:
                 log.error("[JOIN] Failed to join group, group [{}] not exist", groupId);
                 throw new IllegalArgumentException("Failed to join group, group [" + groupId + "] not exist");
@@ -594,7 +592,8 @@ public class Coordinator {
                 describeStreamRequest.setStartPartitionId(partitionId);
                 DescribeStreamResult describeStreamResult = disAsync.describeStream(describeStreamRequest);
                 for (PartitionResult partitionResult : describeStreamResult.getPartitions()) {
-                    if (Utils.getKafkaPartitionFromPartitionId(partitionResult.getPartitionId()) == parts.get(index)) {
+                    int id = Utils.getKafkaPartitionFromPartitionId(partitionResult.getPartitionId());
+                    if (id == parts.get(index)) {
                         StreamPartition partition = new StreamPartition(entry.getKey(), parts.get(index));
                         DisOffsetResetStrategy strategy = subscriptions.resetStrategy(partition);
                         if (strategy != DisOffsetResetStrategy.EARLIEST && strategy != DisOffsetResetStrategy.LATEST) {
@@ -604,9 +603,24 @@ public class Coordinator {
                         String offsetRange = partitionResult.getSequenceNumberRange();
                         long offset = -1;
                         if (offsetRange == null) {
-                            log.error("partition " + partition + " has been expired and is not readable");
+                            if (subscriptions.partitionsAutoAssigned()) {
+                                log.warn("Partition {} get null sequenceNumberRange.", partition);
+                                continue;
+                            }
+                            log.error("Partition " + partition + " has been expired and is not readable");
                             throw new PartitionExpiredException("partition " + partition + " has been expired and is not readable");
                         }
+
+                        // range格式不对，可能表示此分区不存在或正在扩缩容
+                        if (!offsetRange.startsWith("[")) {
+                            if (subscriptions.partitionsAutoAssigned()) {
+                                log.warn("Partition {} get wrong sequenceNumberRange {}.", partition, offsetRange);
+                                continue;
+                            }
+                            log.error("Failed to get partition {} sequenceNumberRange {}.", partition, offsetRange);
+                            throw new DISPartitionNotExistsException("partition " + partition + " not exists");
+                        }
+
                         String[] array = offsetRange.trim().substring(1, offsetRange.length() - 1).split(":");
                         long startOffset = 0;
                         long endOffset = 0;
@@ -615,6 +629,14 @@ public class Coordinator {
                             startOffset = Long.valueOf(array[0].trim());
                             endOffset = Long.valueOf(array[1].trim());
                         }
+
+                        if (oldStreamReadablePartitionCountMap.get(entry.getKey()) != null
+                                && id + 1 > oldStreamReadablePartitionCountMap.get(entry.getKey())) {
+                            // Subscribe模式下扩容分区，则从EARLIEST开始防止数据丢失
+                            strategy = DisOffsetResetStrategy.EARLIEST;
+                            log.info("Find expand partition {}, will starts from EARLIEST, sequenceNumberRange {}.", partition, offsetRange);
+                        }
+
                         if (strategy == DisOffsetResetStrategy.EARLIEST) {
                             offset = startOffset;
                         } else if (strategy == DisOffsetResetStrategy.LATEST) {
@@ -781,6 +803,10 @@ public class Coordinator {
         final AtomicReference<Exception> exceptionReference = new AtomicReference<>();
         final CountDownLatch countDownLatch = new CountDownLatch(streamPartitions.size());
         for (StreamPartition partition : streamPartitions) {
+            if (subscriptions.position(partition) == null) {
+                countDownLatch.countDown();
+                continue;
+            }
             final String startingSequenceNumber = String.valueOf(subscriptions.position(partition));
             final GetPartitionCursorRequest getShardIteratorParam = new GetPartitionCursorRequest();
             getShardIteratorParam.setPartitionId(Utils.getShardIdStringFromPartitionId(partition.partition()));
@@ -960,6 +986,43 @@ public class Coordinator {
         }
         if (asyncCommitOffsetExecutor != null) {
             asyncCommitOffsetExecutor.shutdownNow();
+        }
+    }
+
+    /**
+     * 获取Subscribe模式下通道的可读分区数量
+     */
+    public void getSubscribeStreamPartitionCount() {
+        if (subscriptions.partitionsAutoAssigned() && !subscriptions.hasPatternSubscription() && enableSubscribeExpandingAdapter) {
+            oldStreamReadablePartitionCountMap.clear();
+            oldStreamReadablePartitionCountMap.putAll(curStreamReadablePartitionCountMap);
+            curStreamReadablePartitionCountMap.clear();
+            CountDownLatch countDownLatch = new CountDownLatch(subscriptions.subscription().size());
+            for (String streamName : subscriptions.subscription()) {
+                DescribeStreamRequest describeStreamRequest = new DescribeStreamRequest();
+                describeStreamRequest.setStreamName(streamName);
+                describeStreamRequest.setLimitPartitions(1);
+                disAsync.describeStreamAsync(describeStreamRequest, new AsyncHandler<DescribeStreamResult>() {
+                    @Override
+                    public void onError(Exception exception) {
+                        countDownLatch.countDown();
+                        log.warn(exception.getMessage(), exception);
+                    }
+
+                    @Override
+                    public void onSuccess(DescribeStreamResult describeStreamResult) {
+                        countDownLatch.countDown();
+                        curStreamReadablePartitionCountMap.put(streamName, describeStreamResult.getReadablePartitionCount());
+                    }
+                });
+            }
+            try {
+                countDownLatch.await();
+            } catch (InterruptedException e) {
+                log.warn(e.getMessage(), e);
+            }
+            log.info("old stream readable partition {}, cur stream readable partition {}",
+                    oldStreamReadablePartitionCountMap, curStreamReadablePartitionCountMap);
         }
     }
 }
