@@ -1,33 +1,33 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Configuration status="DEBUG">
-	<properties>
-		<property name="LOG_HOME" value="/var/log/bigdata/consumer" />
-		<property name="LOG_FILE_NAME" value="consumer" />
-		<!--格式化输出：%d表示日期，%thread表示线程名，%-5level：级别从左显示5个字符宽度%msg：日志消息，%n是换行符 -->
-		<property name="LOG_PATTERN" value="%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} %L - %msg%n" />
-	</properties>
+    <properties>
+        <property name="LOG_HOME" value="/var/log/bigdata/consumer" />
+        <property name="LOG_FILE_NAME" value="consumer" />
+        <!--格式化输出：%d表示日期，%thread表示线程名，%-5level：级别从左显示5个字符宽度%msg：日志消息，%n是换行符 -->
+        <property name="LOG_PATTERN" value="%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} %L - %msg%n" />
+    </properties>
     <Appenders>
-		<Console name="Console" target="SYSTEM_OUT">
-			<PatternLayout pattern="${LOG_PATTERN}" />
-		</Console>
-		<RollingRandomAccessFile name="FILE"
-								 fileName="${LOG_HOME}/${LOG_FILE_NAME}.log"
-								 filePattern="${LOG_HOME}/$${date:yyyy-MM}/${LOG_FILE_NAME}-%d{yyyy-MM-dd HH-mm}-%i.log">
-			<PatternLayout
-					pattern="%d{yyyy-MM-dd HH:mm:ss.SSS} [%t] %-5level %logger{36} - %msg%n" />
-			<Policies>
-				<TimeBasedTriggeringPolicy interval="10" />
-				<SizeBasedTriggeringPolicy size="10 MB" />
-			</Policies>
-			<DefaultRolloverStrategy max="20" />
-		</RollingRandomAccessFile>
-	</Appenders>
+        <Console name="Console" target="SYSTEM_OUT">
+            <PatternLayout pattern="${LOG_PATTERN}" />
+        </Console>
+        <RollingRandomAccessFile name="FILE"
+                                 fileName="${LOG_HOME}/${LOG_FILE_NAME}.log"
+                                 filePattern="${LOG_HOME}/$${date:yyyy-MM}/${LOG_FILE_NAME}-%d{yyyy-MM-dd HH-mm}-%i.log">
+            <PatternLayout
+                    pattern="%d{yyyy-MM-dd HH:mm:ss.SSS} [%t] %-5level %logger{36} - %msg%n" />
+            <Policies>
+                <TimeBasedTriggeringPolicy interval="10" />
+                <SizeBasedTriggeringPolicy size="10 MB" />
+            </Policies>
+            <DefaultRolloverStrategy max="20" />
+        </RollingRandomAccessFile>
+    </Appenders>
 
     <Loggers>
-		<Root level="INFO">
-			<appender-ref ref="STDOUT" />
-			<appender-ref ref="FILE" />
-		</Root>
-	</Loggers>
+        <Root level="INFO">
+            <appender-ref ref="STDOUT" />
+            <appender-ref ref="FILE" />
+        </Root>
+    </Loggers>
 
 </Configuration>
