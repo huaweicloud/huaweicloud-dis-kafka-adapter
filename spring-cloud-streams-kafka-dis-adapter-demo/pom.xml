@@ -5,7 +5,7 @@
     <modelVersion>4.0.0</modelVersion>
     <groupId>com.huaweicloud.dis</groupId>
     <artifactId>spring-cloud-streams-kafka-dis-adapter-demoss</artifactId>
-    <version>1.2.2-SNAPSHOT</version>
+    <version>1.2.2</version>
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -70,7 +70,7 @@
         <dependency>
             <groupId>com.huaweicloud.dis</groupId>
             <artifactId>huaweicloud-dis-kafka-adapter-0.11</artifactId>
-            <version>1.2.2-SNAPSHOT</version>
+            <version>1.2.2</version>
         </dependency>
 
         <!-- hot reload - press Ctrl+F9 in IntelliJ after a code change while application is running -->

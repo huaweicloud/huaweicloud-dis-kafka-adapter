@@ -17,7 +17,7 @@ The recommended way to use the DIS Kafka Adapter in your project is to consume i
     <dependency>
         <groupId>com.huaweicloud.dis</groupId>
         <artifactId>huaweicloud-dis-kafka-adapter</artifactId>
-        <version>1.2.1</version>
+        <version>1.2.2</version>
         <scope>compile</scope>
     </dependency>
 
