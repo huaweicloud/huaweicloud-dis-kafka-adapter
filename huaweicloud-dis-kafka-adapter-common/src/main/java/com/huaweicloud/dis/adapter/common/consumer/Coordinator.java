@@ -52,7 +52,6 @@ import org.slf4j.LoggerFactory;
 
 import java.util.*;
 import java.util.concurrent.*;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -94,6 +93,8 @@ public class Coordinator {
     private Map<String, Integer> oldStreamReadablePartitionCountMap = new ConcurrentHashMap<>();
 
     private Map<String, Integer> curStreamReadablePartitionCountMap = new ConcurrentHashMap<>();
+
+    private Map<StreamPartition, Long> lastCommitOffsetMap = new ConcurrentHashMap<>();
 
     boolean enableSubscribeExpandingAdapter = true;
     /**
@@ -425,6 +426,10 @@ public class Coordinator {
     }
 
     public void commitSync(Map<StreamPartition, DisOffsetAndMetadata> offsets) {
+        // 清空以前的提交记录，重新提交
+        for (StreamPartition streamPartition : offsets.keySet()) {
+            lastCommitOffsetMap.remove(streamPartition);
+        }
         commit(Collections.singletonList(new CommitOffsetThunk(offsets, null)));
     }
 
@@ -453,66 +458,72 @@ public class Coordinator {
         }
 
         final CountDownLatch countDownLatch = new CountDownLatch(offsets.size());
-        final AtomicReference<Exception> exceptionAtomicReference = new AtomicReference<>();
-        final AtomicBoolean lock = new AtomicBoolean(false);
+        final Map<StreamPartition, Exception> streamPartitionExceptionMap = new HashMap<>();
         for (Map.Entry<StreamPartition, DisOffsetAndMetadata> offset : offsets.entrySet()) {
+            StreamPartition streamPartition = offset.getKey();
+            // 获取上一次提交位置
+            Long lastCommitted = lastCommitOffsetMap.get(streamPartition);
+            if (lastCommitted != null && lastCommitted == offset.getValue().offset()) {
+                // 和上一次提交位置相同，则不重复发起请求
+                log.debug("{} already commit {}", streamPartition, lastCommitted);
+                countDownLatch.countDown();
+                continue;
+            }
             CommitCheckpointRequest commitCheckpointRequest = new CommitCheckpointRequest();
             commitCheckpointRequest.setCheckpointType(CheckpointTypeEnum.LAST_READ.name());
             commitCheckpointRequest.setSequenceNumber(String.valueOf(offset.getValue().offset()));
             commitCheckpointRequest.setAppName(groupId);
             commitCheckpointRequest.setMetadata(offset.getValue().metadata());
-            commitCheckpointRequest.setStreamName(offset.getKey().stream());
-            commitCheckpointRequest.setPartitionId(Utils.getShardIdStringFromPartitionId(offset.getKey().partition()));
+            commitCheckpointRequest.setStreamName(streamPartition.stream());
+            commitCheckpointRequest.setPartitionId(Utils.getShardIdStringFromPartitionId(streamPartition.partition()));
             disAsync.commitCheckpointAsync(commitCheckpointRequest, new AsyncHandler<CommitCheckpointResult>() {
                 @Override
                 public void onError(Exception exception) {
-                    exceptionAtomicReference.set(exception);
+                    streamPartitionExceptionMap.put(streamPartition, exception);
                     countDownLatch.countDown();
                     log.error("Failed to commitCheckpointAsync, error : [{}], request : [{}]",
                             exception.getMessage(), JsonUtils.objToJson(commitCheckpointRequest));
-
-                    try {
-                        countDownLatch.await();
-                    } catch (InterruptedException ignored) {
-                    }
-
-                    if (lock.compareAndSet(false, true)) {
-                        for (CommitOffsetThunk asyncCommitOffsetObj : asyncCommitOffsetObjList) {
-                            if (asyncCommitOffsetObj.callback != null) {
-                                asyncCommitOffsetObj.callback.onComplete(asyncCommitOffsetObj.offsets, exceptionAtomicReference.get());
-                            }
-                        }
-                    }
                 }
 
                 @Override
                 public void onSuccess(CommitCheckpointResult commitCheckpointResult) {
-                    if (subscriptions.isAssigned(offset.getKey())) {
-                        subscriptions.committed(offset.getKey(), offset.getValue());
+                    if (subscriptions.isAssigned(streamPartition)) {
+                        subscriptions.committed(streamPartition, offset.getValue());
                     }
+                    lastCommitOffsetMap.put(streamPartition, offset.getValue().offset());
                     countDownLatch.countDown();
                     log.debug("Success to commitCheckpointAsync, {} : {}", offset.getKey(), offset.getValue());
-                    try {
-                        countDownLatch.await();
-                    } catch (InterruptedException ignored) {
-                    }
-
-                    if (exceptionAtomicReference.get() == null) {
-                        if (lock.compareAndSet(false, true)) {
-                            for (CommitOffsetThunk asyncCommitOffsetObj : asyncCommitOffsetObjList) {
-                                if (asyncCommitOffsetObj.callback != null) {
-                                    asyncCommitOffsetObj.callback.onComplete(asyncCommitOffsetObj.offsets, null);
-                                }
-                            }
-                        }
-                    }
                 }
             });
         }
 
+        AtomicReference<Exception> exceptionAtomicReference = new AtomicReference<>();
         try {
             countDownLatch.await();
         } catch (InterruptedException e) {
+            log.error(e.getMessage(), e);
+            exceptionAtomicReference.set(e);
+        }
+
+        try {
+            // 对每个回调函数进行处理
+            for (CommitOffsetThunk asyncCommitOffsetObj : asyncCommitOffsetObjList) {
+                if (asyncCommitOffsetObj.callback != null) {
+                    Exception exception = exceptionAtomicReference.get();
+                    if (exception == null) {
+                        // 只要有一个分区提交失败，则回调失败
+                        for (StreamPartition streamPartition : asyncCommitOffsetObj.offsets.keySet()) {
+                            exception = streamPartitionExceptionMap.get(streamPartition);
+                            if (exception != null) {
+                                exceptionAtomicReference.set(exception);
+                                break;
+                            }
+                        }
+                    }
+                    asyncCommitOffsetObj.callback.onComplete(asyncCommitOffsetObj.offsets, exception);
+                }
+            }
+        } catch (Exception e) {
             log.error(e.getMessage(), e);
         }
         handleError(exceptionAtomicReference);
@@ -520,6 +531,10 @@ public class Coordinator {
 
     public void commitAsync(Map<StreamPartition, DisOffsetAndMetadata> offsets, DisOffsetCommitCallback callback) {
         try {
+            // 由用户触发的请求，清空以前提交记录，重新提交
+            for (StreamPartition streamPartition : offsets.keySet()) {
+                lastCommitOffsetMap.remove(streamPartition);
+            }
             asyncCommitOffsetQueue.put(new CommitOffsetThunk(offsets, callback));
         } catch (InterruptedException e) {
             log.error(e.getMessage(), e);
@@ -561,8 +576,13 @@ public class Coordinator {
                 //            resetOffset(tp);
             } else if (subscriptions.committed(tp) == null) {
                 // there's no committed position, so we need to reset with the default strategy
-                subscriptions.needOffsetReset(tp);
-
+                if (isExpandPartition(tp)) {
+                    // Subscribe模式下扩容分区，则从EARLIEST开始防止数据丢失
+                    subscriptions.needOffsetReset(tp, DisOffsetResetStrategy.EARLIEST);
+                    log.info("Find new expand partition {}, checkpoint is null, so will starts from EARLIEST.", tp);
+                } else {
+                    subscriptions.needOffsetReset(tp);
+                }
                 //            resetOffset(tp);
                 addPartition(describeTopic, tp);
             } else {
@@ -628,13 +648,6 @@ public class Coordinator {
                         if (!(array[0] == null || array[0].isEmpty() || array[0].contains("null"))) {
                             startOffset = Long.valueOf(array[0].trim());
                             endOffset = Long.valueOf(array[1].trim());
-                        }
-
-                        if (oldStreamReadablePartitionCountMap.get(entry.getKey()) != null
-                                && id + 1 > oldStreamReadablePartitionCountMap.get(entry.getKey())) {
-                            // Subscribe模式下扩容分区，则从EARLIEST开始防止数据丢失
-                            strategy = DisOffsetResetStrategy.EARLIEST;
-                            log.info("Find expand partition {}, will starts from EARLIEST, sequenceNumberRange {}.", partition, offsetRange);
                         }
 
                         if (strategy == DisOffsetResetStrategy.EARLIEST) {
@@ -807,6 +820,8 @@ public class Coordinator {
                 countDownLatch.countDown();
                 continue;
             }
+            // 重设分区位置，清理上一次提交位置
+            lastCommitOffsetMap.remove(partition);
             final String startingSequenceNumber = String.valueOf(subscriptions.position(partition));
             final GetPartitionCursorRequest getShardIteratorParam = new GetPartitionCursorRequest();
             getShardIteratorParam.setPartitionId(Utils.getShardIdStringFromPartitionId(partition.partition()));
@@ -827,7 +842,13 @@ public class Coordinator {
                                 message = exception.getMessage();
                             }
                             // special treat for out of range partition
-                            subscriptions.needOffsetReset(partition);
+                            if (isExpandPartition(partition)) {
+                                subscriptions.needOffsetReset(partition, DisOffsetResetStrategy.EARLIEST);
+                                log.info("Find new expand partition {}, checkpoint is {} but out of range {}, so will starts from EARLIEST.",
+                                        partition, startingSequenceNumber, message);
+                            } else {
+                                subscriptions.needOffsetReset(partition);
+                            }
                             resetOffset(partition);
                             String newStartingSequenceNumber = String.valueOf(subscriptions.position(partition));
                             getShardIteratorParam.setStartingSequenceNumber(newStartingSequenceNumber);
@@ -906,6 +927,11 @@ public class Coordinator {
         generation.set(DEFAULT_GENERATION);
     }
 
+    /**
+     * 抛出DISException，用于上层业务捕获adapter的异常
+     *
+     * @param exceptionAtomicReference 异常
+     */
     private void handleError(AtomicReference<Exception> exceptionAtomicReference) {
         if (exceptionAtomicReference != null) {
             Exception e = exceptionAtomicReference.get();
@@ -1024,5 +1050,10 @@ public class Coordinator {
             log.info("old stream readable partition {}, cur stream readable partition {}",
                     oldStreamReadablePartitionCountMap, curStreamReadablePartitionCountMap);
         }
+    }
+
+    boolean isExpandPartition(StreamPartition streamPartition) {
+        Integer oldPartitionCount = oldStreamReadablePartitionCountMap.get(streamPartition.stream());
+        return oldPartitionCount != null && streamPartition.partition() + 1 > oldPartitionCount;
     }
 }
