@@ -386,7 +386,7 @@ public class Coordinator {
             case WAITING:
                 log.info("[SYNC] ReSync group [{}]", groupId);
                 try {
-                    sleep(5000L);
+                    sleep(500L);
                 } catch (InterruptedException e) {
                     log.error(e.getMessage());
                 }
