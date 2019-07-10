@@ -11,3 +11,7 @@
 # 1.1.3
 - Features
   * add common adapter
+
+# 1.2.3
+- Features
+  * use huaweicloud-sdk-dis-java 1.3.4 version
