@@ -363,7 +363,7 @@ public class DISConsumer extends AbstractAdapter implements IDISConsumer {
             while (true) {
                 ListStreamsRequest listStreamsRequest = new ListStreamsRequest();
                 listStreamsRequest.setLimit(limit);
-                listStreamsRequest.setExclusivetartStreamName(startStreamName);
+                listStreamsRequest.setExclusiveStartStreamName(startStreamName);
                 ListStreamsResult listStreamsResult = disAsync.listStreams(listStreamsRequest);
                 if (listStreamsResult == null || listStreamsResult.getStreamNames() == null) {
                     break;
