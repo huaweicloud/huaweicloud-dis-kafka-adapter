@@ -27,6 +27,8 @@ import com.huaweicloud.dis.core.DISCredentials;
 import com.huaweicloud.dis.core.handler.AsyncHandler;
 import com.huaweicloud.dis.exception.DISClientException;
 import com.huaweicloud.dis.exception.DISTimestampOutOfRangeException;
+import com.huaweicloud.dis.http.exception.HttpClientErrorException;
+import com.huaweicloud.dis.http.exception.RestClientException;
 import com.huaweicloud.dis.iface.data.request.GetPartitionCursorRequest;
 import com.huaweicloud.dis.iface.data.response.GetPartitionCursorResult;
 import com.huaweicloud.dis.iface.data.response.Record;
@@ -184,27 +186,34 @@ public class DISConsumer extends AbstractAdapter implements IDISConsumer {
         while (flag) {
             try {
                 partitionRecords = innerPoll(timeout);
-            } catch (Exception e) {
-                if (autoRetry) {
+            } catch (Throwable t) {
+                if (autoRetry && isRetriableException(t)) {
                     // 如果自动重试开启，则重试，保证进程不因为此异常而终止
                     retryCount++;
                     if (retryCount >= totalRetryNum) {
                         flag = false;
                     }
-                    log.warn("Failed to poll, currRetryCount is {}, wait for {} ms, cause: {}", retryCount, retryWaitTime, e.getCause());
+                    log.warn("Failed to poll, currRetryCount is {}, wait for {} ms, StackTrace: {}", retryCount, retryWaitTime, t);
                     try {
                         Thread.sleep(retryWaitTime);
                     } catch (InterruptedException e1) {
                         e1.printStackTrace();
                     }
                 } else {
-                    // 自动重试开启时，直接将异常抛出
-                    throw e;
+                    // 自动重试关闭时，直接将异常抛出
+                    throw t;
                 }
             }
         }
 
         return partitionRecords;
+    }
+
+    protected boolean isRetriableException(Throwable t)
+    {
+        // 对于客户端类异常，不进行重试
+        return !(t instanceof IllegalArgumentException) && !(t instanceof HttpClientErrorException)
+                || (t.getCause() != null && isRetriableException(t.getCause()));
     }
 
     private Map<StreamPartition, List<Record>> innerPoll(long timeout) {
