@@ -175,6 +175,39 @@ public class DISConsumer extends AbstractAdapter implements IDISConsumer {
 
     @Override
     public Map<StreamPartition, List<Record>> poll(long timeout) {
+        Map<StreamPartition, List<Record>> partitionRecords = null;
+        boolean autoRetry = this.config.getBoolean(DisConsumerConfig.ENABLE_EXCEPTION_AUTO_RETRY_CONFIG, true);
+        long totalRetryNum = Long.valueOf(this.config.get(DisConsumerConfig.PROPERTY_EXCEPTION_RETRY_NUM, String.valueOf(Long.MAX_VALUE)));
+        long retryWaitTime = Long.valueOf(this.config.get(DisConsumerConfig.PROPERTY_EXCEPTION_RETRY_WAIT_TIME_MS, "60000"));
+        long retryCount = 0;
+        boolean flag = true;
+        while (flag) {
+            try {
+                partitionRecords = innerPoll(timeout);
+            } catch (Exception e) {
+                if (autoRetry) {
+                    // 如果自动重试开启，则重试，保证进程不因为此异常而终止
+                    retryCount++;
+                    if (retryCount >= totalRetryNum) {
+                        flag = false;
+                    }
+                    log.warn("Failed to poll, currRetryCount is {}, wait for {} ms, cause: {}", retryCount, retryWaitTime, e.getCause());
+                    try {
+                        Thread.sleep(retryWaitTime);
+                    } catch (InterruptedException e1) {
+                        e1.printStackTrace();
+                    }
+                } else {
+                    // 自动重试开启时，直接将异常抛出
+                    throw e;
+                }
+            }
+        }
+
+        return partitionRecords;
+    }
+
+    private Map<StreamPartition, List<Record>> innerPoll(long timeout) {
         acquire();
         try {
             if (timeout < 0) {

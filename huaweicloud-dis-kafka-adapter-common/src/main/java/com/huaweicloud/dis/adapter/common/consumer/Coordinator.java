@@ -384,7 +384,7 @@ public class Coordinator {
                 this.generation.set(syncGroupResponse.getGeneration());
                 return;
             case WAITING:
-                log.info("[SYNC] ReSync group [{}]", groupId);
+                log.info("[SYNC] ReSync group [{}], clientId [{}]", groupId, clintId);
                 try {
                     sleep(500L);
                 } catch (InterruptedException e) {
@@ -393,7 +393,7 @@ public class Coordinator {
                 doSyncGroup();
                 break;
             case REJOIN:
-                log.info("[SYNC] Rejoin group [{}]", groupId);
+                log.info("[SYNC] Rejoin group [{}], clientId [{}]", groupId, clintId);
                 doJoinGroup();
                 break;
             case GROUP_NOT_EXIST:
