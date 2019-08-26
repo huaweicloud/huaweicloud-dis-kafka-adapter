@@ -186,6 +186,7 @@ public class DISConsumer extends AbstractAdapter implements IDISConsumer {
         while (flag) {
             try {
                 partitionRecords = innerPoll(timeout);
+                break;
             } catch (Throwable t) {
                 if (autoRetry && isRetriableException(t)) {
                     // 如果自动重试开启，则重试，保证进程不因为此异常而终止
@@ -193,7 +194,7 @@ public class DISConsumer extends AbstractAdapter implements IDISConsumer {
                     if (retryCount >= totalRetryNum) {
                         flag = false;
                     }
-                    log.warn("Failed to poll, currRetryCount is {}, wait for {} ms, StackTrace: {}", retryCount, retryWaitTime, t);
+                    log.warn("Failed to poll, currRetryCount is {}, wait for {} ms", retryCount, retryWaitTime, t);
                     try {
                         Thread.sleep(retryWaitTime);
                     } catch (InterruptedException e1) {
