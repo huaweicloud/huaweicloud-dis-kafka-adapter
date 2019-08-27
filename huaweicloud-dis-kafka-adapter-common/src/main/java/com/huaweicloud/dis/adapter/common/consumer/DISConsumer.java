@@ -218,9 +218,11 @@ public class DISConsumer extends AbstractAdapter implements IDISConsumer {
     {
         // 对于客户端类异常，不进行重试
         if (t.getCause() == null) {
-            return !(t instanceof IllegalArgumentException) && !(t instanceof HttpClientErrorException);
+            return !(t instanceof IllegalArgumentException) && !(t instanceof HttpClientErrorException)
+                    && !(t instanceof DISClientException);
         } else {
-            return isRetriableException(t.getCause());
+            return !(t instanceof IllegalArgumentException) && !(t instanceof HttpClientErrorException)
+                    && !(t instanceof DISClientException) && isRetriableException(t.getCause());
         }
     }
 
