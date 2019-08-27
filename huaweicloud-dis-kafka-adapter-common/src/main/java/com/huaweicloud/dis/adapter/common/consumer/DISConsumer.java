@@ -186,8 +186,7 @@ public class DISConsumer extends AbstractAdapter implements IDISConsumer {
             long totalRetryNum = Long.valueOf(this.config.get(DisConsumerConfig.PROPERTY_EXCEPTION_RETRY_NUM, "60"));
             long retryWaitTime = Long.valueOf(this.config.get(DisConsumerConfig.PROPERTY_EXCEPTION_RETRY_WAIT_TIME_MS, "60000"));
             long retryCount = 0;
-            boolean flag = true;
-            while (flag) {
+            while (true) {
                 try {
                     partitionRecords = innerPoll(timeout);
                     break;
@@ -195,7 +194,8 @@ public class DISConsumer extends AbstractAdapter implements IDISConsumer {
                     if (isRetriableException(t)) {
                         retryCount++;
                         if (retryCount > totalRetryNum) {
-                            flag = false;
+                            log.warn("Reach the maximum number of retries, will not retry.");
+                            throw t;
                         }
                         log.warn("Failed to poll, currRetryCount is {}, wait for {} ms", retryCount, retryWaitTime, t);
                         try {
