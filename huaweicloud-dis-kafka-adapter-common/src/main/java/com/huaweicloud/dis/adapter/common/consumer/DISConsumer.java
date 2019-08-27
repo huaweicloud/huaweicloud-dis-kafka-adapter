@@ -27,8 +27,7 @@ import com.huaweicloud.dis.core.DISCredentials;
 import com.huaweicloud.dis.core.handler.AsyncHandler;
 import com.huaweicloud.dis.exception.DISClientException;
 import com.huaweicloud.dis.exception.DISTimestampOutOfRangeException;
-import com.huaweicloud.dis.http.exception.HttpClientErrorException;
-import com.huaweicloud.dis.http.exception.RestClientException;
+import com.huaweicloud.dis.http.exception.RestClientResponseException;
 import com.huaweicloud.dis.iface.data.request.GetPartitionCursorRequest;
 import com.huaweicloud.dis.iface.data.response.GetPartitionCursorResult;
 import com.huaweicloud.dis.iface.data.response.Record;
@@ -39,9 +38,15 @@ import com.huaweicloud.dis.iface.stream.response.ListStreamsResult;
 import com.huaweicloud.dis.iface.stream.response.PartitionResult;
 import com.huaweicloud.dis.util.JsonUtils;
 import com.huaweicloud.dis.util.PartitionCursorTypeEnum;
+import org.apache.http.NoHttpResponseException;
+import org.apache.http.conn.ConnectTimeoutException;
+import org.apache.http.conn.HttpHostConnectException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.net.ssl.SSLException;
+import java.net.SocketException;
+import java.net.SocketTimeoutException;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
@@ -185,6 +190,12 @@ public class DISConsumer extends AbstractAdapter implements IDISConsumer {
             // 如果自动重试开启，则重试，保证进程不因为此异常而终止
             long totalRetryNum = Long.valueOf(this.config.get(DisConsumerConfig.PROPERTY_EXCEPTION_RETRY_NUM, "60"));
             long retryWaitTime = Long.valueOf(this.config.get(DisConsumerConfig.PROPERTY_EXCEPTION_RETRY_WAIT_TIME_MS, "60000"));
+            if (totalRetryNum < 0) {
+                throw new IllegalArgumentException("retryNum must not be negative");
+            }
+            if (retryWaitTime < 0) {
+                throw new IllegalArgumentException("retryWaitTime must not be negative");
+            }
             long retryCount = 0;
             while (true) {
                 try {
@@ -216,14 +227,12 @@ public class DISConsumer extends AbstractAdapter implements IDISConsumer {
 
     protected boolean isRetriableException(Throwable t)
     {
-        // 对于客户端类异常，不进行重试
-        if (t.getCause() == null) {
-            return !(t instanceof IllegalArgumentException) && !(t instanceof HttpClientErrorException)
-                    && !(t instanceof DISClientException);
-        } else {
-            return !(t instanceof IllegalArgumentException) && !(t instanceof HttpClientErrorException)
-                    && !(t instanceof DISClientException) && isRetriableException(t.getCause());
-        }
+        // 对于连接超时/网络闪断/Socket异常/服务端5xx错误进行重试
+        return t instanceof ConnectTimeoutException || t instanceof NoHttpResponseException
+                || t instanceof HttpHostConnectException || t instanceof SocketException || t instanceof SSLException
+                || (t instanceof SocketTimeoutException)
+                || (t instanceof RestClientResponseException && ((RestClientResponseException) t).getRawStatusCode() / 100 == 5)
+                || (t.getCause() != null && isRetriableException(t.getCause()));
     }
 
     private Map<StreamPartition, List<Record>> innerPoll(long timeout) {
