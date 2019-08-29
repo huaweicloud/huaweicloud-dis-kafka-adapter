@@ -20,6 +20,16 @@ import com.huaweicloud.dis.DISConfig;
 public class DisConsumerConfig extends DISConfig {
     public static final String GROUP_ID_CONFIG = DISConfig.GROUP_ID;
 
+    /**
+     * 是否启用定时心跳，默认开启</br>
+     * 定时心跳周期为 {@value #HEARTBEAT_INTERVAL_MS_CONFIG}
+     */
+    public static final String ENABLE_PERIODIC_HEARTBEAT_CONFIG = "heartbeat.periodic.heartbeat";
+
+    /**
+     * 定时心跳发送周期</br>
+     * 定时心跳开关通过 {@value ENABLE_PERIODIC_HEARTBEAT_CONFIG} 启用
+     */
     public static final String HEARTBEAT_INTERVAL_MS_CONFIG = "heartbeat.interval.ms";
 
     public static final String ENABLE_AUTO_COMMIT_CONFIG = "enable.auto.commit";

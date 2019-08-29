@@ -102,6 +102,11 @@ public class Coordinator {
      */
     private ExecutorService asyncCommitOffsetExecutor;
 
+    /**
+     * 定时心跳线程
+     */
+    private ExecutorService heartbeatExecutor;
+
     public Coordinator(DISAsync disAsync,
                        String clientId,
                        String groupId,
@@ -136,6 +141,21 @@ public class Coordinator {
             this.delayedTasks.add(new AutoCommitTask(System.currentTimeMillis() + autoCommitIntervalMs, autoCommitIntervalMs));
         }
         this.enableSubscribeExpandingAdapter = Boolean.valueOf(disConfig.get("enable.subscribe.expanding.adapter", "true"));
+
+        boolean periodicHeartbeatEnabled = Boolean.valueOf(disConfig.get(DisConsumerConfig.ENABLE_PERIODIC_HEARTBEAT_CONFIG, "true"));
+        if (periodicHeartbeatEnabled) {
+            long heartbeatIntervalMs = Long.valueOf(disConfig.get(DisConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, "20000"));
+            this.heartbeatExecutor = Executors.newSingleThreadExecutor(new ThreadFactory() {
+                @Override
+                public Thread newThread(Runnable r) {
+                    Thread thread = Executors.defaultThreadFactory().newThread(r);
+                    thread.setName("periodic-heartbeat-task");
+                    thread.setDaemon(true);
+                    return thread;
+                }
+            });
+            this.heartbeatExecutor.submit(new PeriodicHeartbeatThread(heartbeatIntervalMs));
+        }
     }
 
     public boolean isStable() {
@@ -331,6 +351,10 @@ public class Coordinator {
             case OK:
                 if (subscriptions.hasPatternSubscription()) {
                     subscriptions.changeSubscription(joinGroupResponse.getSubscription());
+                }
+                // FIXME
+                if (joinGroupResponse.getSyncDelayedTimeMs() < 2000L) {
+                    joinGroupResponse.setSyncDelayedTimeMs(25000L);
                 }
                 log.info("[JOIN] Waiting [{}ms] for other clients to join group [{}]", joinGroupResponse.getSyncDelayedTimeMs(), groupId);
                 try {
@@ -996,6 +1020,37 @@ public class Coordinator {
         }
     }
 
+    private class PeriodicHeartbeatThread implements Runnable {
+
+        private long heartbeatIntervalMs;
+
+        public PeriodicHeartbeatThread(long heartbeatIntervalMs) {
+            this.heartbeatIntervalMs = heartbeatIntervalMs;
+        }
+
+        @Override
+        public void run() {
+
+            while (true) {
+                try {
+                    Thread.sleep(heartbeatIntervalMs);
+                } catch (InterruptedException e) {
+                    log.error(e.getMessage(), e);
+                }
+
+                try {
+                    HeartbeatRequest heartbeatRequest = new HeartbeatRequest();
+                    heartbeatRequest.setClientId(clintId);
+                    heartbeatRequest.setGroupId(groupId);
+                    heartbeatRequest.setGeneration(generation.get());
+                    innerDISClient.handleHeartbeatRequest(heartbeatRequest);
+                } catch (Exception e) {
+                    log.error("Failed to invoke heartbeat request, errorInfo [{}]", e.getMessage(), e);
+                }
+            }
+        }
+    }
+
     public void close() {
         long start = System.currentTimeMillis();
         int loop = 0;
@@ -1012,6 +1067,9 @@ public class Coordinator {
         }
         if (asyncCommitOffsetExecutor != null) {
             asyncCommitOffsetExecutor.shutdownNow();
+        }
+        if (heartbeatExecutor != null) {
+            heartbeatExecutor.shutdown();
         }
     }
 
