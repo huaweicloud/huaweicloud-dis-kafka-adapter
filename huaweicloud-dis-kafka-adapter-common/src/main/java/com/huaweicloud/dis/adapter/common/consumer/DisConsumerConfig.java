@@ -51,4 +51,9 @@ public class DisConsumerConfig extends DISConfig {
     public static final String PROPERTY_EXCEPTION_RETRY_NUM = "poll.exception.retry.num";
 
     public static final String PROPERTY_EXCEPTION_RETRY_WAIT_TIME_MS = "poll.exception.retry.wait.time.ms";
+
+    /**
+     * 是否开启分配加速，默认不开启，建议只有单个Consumer时开启
+     */
+    public static final String ENABLE_ACCELERATE_ASSIGN_CONFIG = "enable.accelerate.assign";
 }

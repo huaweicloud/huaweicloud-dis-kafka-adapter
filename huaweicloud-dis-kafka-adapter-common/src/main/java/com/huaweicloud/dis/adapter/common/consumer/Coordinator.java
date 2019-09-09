@@ -27,8 +27,7 @@ import com.huaweicloud.dis.adapter.common.model.StreamPartition;
 import com.huaweicloud.dis.core.DISCredentials;
 import com.huaweicloud.dis.core.handler.AsyncHandler;
 import com.huaweicloud.dis.core.util.StringUtils;
-import com.huaweicloud.dis.exception.DISClientException;
-import com.huaweicloud.dis.exception.DISPartitionNotExistsException;
+import com.huaweicloud.dis.exception.*;
 import com.huaweicloud.dis.iface.coordinator.request.HeartbeatRequest;
 import com.huaweicloud.dis.iface.coordinator.request.JoinGroupRequest;
 import com.huaweicloud.dis.iface.coordinator.request.LeaveGroupRequest;
@@ -78,6 +77,12 @@ public class Coordinator {
 
     private boolean autoCommitEnabled;
 
+    private boolean periodicHeartbeatEnabled;
+
+    private long heartbeatIntervalMs;
+
+    private boolean accelerateAssignEnabled;
+
     private Map<String, List<Integer>> assignment;
 
     private ConcurrentHashMap<StreamPartition, PartitionCursor> nextIterators;
@@ -113,6 +118,8 @@ public class Coordinator {
                        SubscriptionState subscriptions,
                        Boolean autoCommitEnabled,
                        long autoCommitIntervalMs,
+                       Boolean periodicHeartbeatEnabled,
+                       long heartbeatIntervalMs,
                        ConcurrentHashMap<StreamPartition, PartitionCursor> nextIterators,
                        DISConfig disConfig) {
         this.disAsync = disAsync;
@@ -142,20 +149,10 @@ public class Coordinator {
         }
         this.enableSubscribeExpandingAdapter = Boolean.valueOf(disConfig.get("enable.subscribe.expanding.adapter", "true"));
 
-        boolean periodicHeartbeatEnabled = Boolean.valueOf(disConfig.get(DisConsumerConfig.ENABLE_PERIODIC_HEARTBEAT_CONFIG, "true"));
-        if (periodicHeartbeatEnabled) {
-            long heartbeatIntervalMs = Long.valueOf(disConfig.get(DisConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, "20000"));
-            this.heartbeatExecutor = Executors.newSingleThreadExecutor(new ThreadFactory() {
-                @Override
-                public Thread newThread(Runnable r) {
-                    Thread thread = Executors.defaultThreadFactory().newThread(r);
-                    thread.setName("periodic-heartbeat-task");
-                    thread.setDaemon(true);
-                    return thread;
-                }
-            });
-            this.heartbeatExecutor.submit(new PeriodicHeartbeatThread(heartbeatIntervalMs));
-        }
+        this.periodicHeartbeatEnabled = periodicHeartbeatEnabled;
+        this.heartbeatIntervalMs = heartbeatIntervalMs;
+
+        this.accelerateAssignEnabled = Boolean.valueOf(disConfig.get(DisConsumerConfig.ENABLE_ACCELERATE_ASSIGN_CONFIG, "false"));
     }
 
     public boolean isStable() {
@@ -336,6 +333,7 @@ public class Coordinator {
         JoinGroupRequest joinGroupRequest = new JoinGroupRequest();
         joinGroupRequest.setClientId(clintId);
         joinGroupRequest.setGroupId(groupId);
+        joinGroupRequest.setAccelerateAssignEnabled(this.accelerateAssignEnabled);
         if (subscriptions.hasPatternSubscription()) {
             joinGroupRequest.setStreamPattern(subscriptions.getSubscribedPattern().pattern());
         } else {
@@ -351,10 +349,6 @@ public class Coordinator {
             case OK:
                 if (subscriptions.hasPatternSubscription()) {
                     subscriptions.changeSubscription(joinGroupResponse.getSubscription());
-                }
-                // FIXME
-                if (joinGroupResponse.getSyncDelayedTimeMs() < 2000L) {
-                    joinGroupResponse.setSyncDelayedTimeMs(25000L);
                 }
                 log.info("[JOIN] Waiting [{}ms] for other clients to join group [{}]", joinGroupResponse.getSyncDelayedTimeMs(), groupId);
                 try {
@@ -497,13 +491,20 @@ public class Coordinator {
             commitCheckpointRequest.setCheckpointType(CheckpointTypeEnum.LAST_READ.name());
             commitCheckpointRequest.setSequenceNumber(String.valueOf(offset.getValue().offset()));
             commitCheckpointRequest.setAppName(groupId);
+            commitCheckpointRequest.setClientId(clintId);
+            commitCheckpointRequest.setGenerationId(generation.get());
             commitCheckpointRequest.setMetadata(offset.getValue().metadata());
             commitCheckpointRequest.setStreamName(streamPartition.stream());
             commitCheckpointRequest.setPartitionId(Utils.getShardIdStringFromPartitionId(streamPartition.partition()));
             disAsync.commitCheckpointAsync(commitCheckpointRequest, new AsyncHandler<CommitCheckpointResult>() {
                 @Override
                 public void onError(Exception exception) {
-                    streamPartitionExceptionMap.put(streamPartition, exception);
+                    if (!(exception instanceof DISConsumerMemberNotExistsException)
+                            || !(exception instanceof DISConsumerGroupRebalanceInProgressException)
+                            || !(exception instanceof DISConsumerGroupIllegalGenerationException)) {
+                        // 由于rebalanced导致的checkpoint提交失败，打印日志即可，无需将异常抛出
+                        streamPartitionExceptionMap.put(streamPartition, exception);
+                    }
                     countDownLatch.countDown();
                     log.error("Failed to commitCheckpointAsync, error : [{}], request : [{}]",
                             exception.getMessage(), JsonUtils.objToJson(commitCheckpointRequest));
@@ -943,6 +944,28 @@ public class Coordinator {
                     }
                 }
             }
+            activePeriodicHeartbeat(); // 激活定时心跳
+        }
+        return true;
+    }
+
+    public boolean activePeriodicHeartbeat() {
+        if (this.periodicHeartbeatEnabled && this.heartbeatExecutor == null) {
+            log.info("Periodic Heartbeat Task is active now, groupId: {}, clientId: {}.", groupId, clintId);
+            this.heartbeatExecutor = Executors.newSingleThreadExecutor(new ThreadFactory() {
+                @Override
+                public Thread newThread(Runnable r) {
+                    Thread thread = Executors.defaultThreadFactory().newThread(r);
+                    thread.setName("periodic-heartbeat-task" + groupId + "-" + UUID.randomUUID());
+                    thread.setDaemon(true);
+                    return thread;
+                }
+            });
+            this.heartbeatExecutor.submit(new PeriodicHeartbeatThread(this.heartbeatIntervalMs));
+//            Thread thread = new Thread(new PeriodicHeartbeatThread(heartbeatIntervalMs));
+//            thread.setName("periodic-heartbeat-task" + groupId + "-" + UUID.randomUUID());
+//            thread.setDaemon(true);
+//            thread.start();
         }
         return true;
     }
@@ -1032,20 +1055,38 @@ public class Coordinator {
         public void run() {
 
             while (true) {
-                try {
-                    Thread.sleep(heartbeatIntervalMs);
-                } catch (InterruptedException e) {
-                    log.error(e.getMessage(), e);
-                }
 
-                try {
-                    HeartbeatRequest heartbeatRequest = new HeartbeatRequest();
-                    heartbeatRequest.setClientId(clintId);
-                    heartbeatRequest.setGroupId(groupId);
-                    heartbeatRequest.setGeneration(generation.get());
-                    innerDISClient.handleHeartbeatRequest(heartbeatRequest);
-                } catch (Exception e) {
-                    log.error("Failed to invoke heartbeat request, errorInfo [{}]", e.getMessage(), e);
+                if (state == ClientState.STABLE || state == ClientState.SYNCING) {
+                    long begin = System.currentTimeMillis();
+                    try {
+                        Thread.sleep(heartbeatIntervalMs);
+                    } catch (InterruptedException e) {
+                        log.error(e.getMessage(), e);
+                    }
+                    long end = System.currentTimeMillis();
+                    if(end - begin > 30000L){
+                        log.warn("Periodic Heartbeat Thread sleep for more than 30000MS, sleepTime: {}",  end - begin);
+                    }
+
+                    try {
+                        begin = System.currentTimeMillis();
+                        HeartbeatRequest heartbeatRequest = new HeartbeatRequest();
+                        heartbeatRequest.setClientId(clintId);
+                        heartbeatRequest.setGroupId(groupId);
+                        heartbeatRequest.setGeneration(generation.get());
+                        HeartbeatResponse heartbeatResponse = innerDISClient.handleHeartbeatRequest(heartbeatRequest);
+                        if (heartbeatResponse.getState() != HeartbeatResponse.HeartBeatResponseState.STABLE) {
+                            log.warn("Periodic Heartbeat Thread: Group is not stable, group state: {}, groupId: {}", heartbeatResponse.getState(), groupId);
+                            new HeartbeatDelayedRequest(0, false).doRequest();
+                        }
+                        end = System.currentTimeMillis();
+                        if (end - begin > 30000L) {
+                            log.warn("Periodic Heartbeat Thread: heartbeat request took more than 30000MS, spendTime: {}", end - begin);
+                        }
+                        log.debug("Heartbeat beginTime: {}, endTime: {}, cost: {}, heartbeatInterval: {}, threadid: {}", begin, end, end - begin, heartbeatIntervalMs, Thread.currentThread().getId());
+                    } catch (Exception e) {
+                        log.error("Failed to invoke heartbeat request, errorInfo [{}]", e.getMessage(), e);
+                    }
                 }
             }
         }

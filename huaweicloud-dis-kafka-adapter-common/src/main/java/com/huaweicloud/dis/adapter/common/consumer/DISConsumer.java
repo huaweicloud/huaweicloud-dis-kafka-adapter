@@ -88,6 +88,8 @@ public class DISConsumer extends AbstractAdapter implements IDISConsumer {
         this.nextIterators = new ConcurrentHashMap<>();
         boolean autoCommitEnabled = disConfig.getBoolean(DisConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, true);
         long autoCommitIntervalMs = Long.valueOf(disConfig.get(DisConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG, "5000"));
+        boolean periodicHeartbeatEnabled = Boolean.valueOf(disConfig.get(DisConsumerConfig.ENABLE_PERIODIC_HEARTBEAT_CONFIG, "true"));
+        long heartbeatIntervalMs = Long.valueOf(disConfig.get(DisConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, "10000"));
 
         this.coordinator = new Coordinator(this.disAsync,
                 this.clientId,
@@ -95,6 +97,8 @@ public class DISConsumer extends AbstractAdapter implements IDISConsumer {
                 this.subscriptions,
                 autoCommitEnabled,
                 autoCommitIntervalMs,
+                periodicHeartbeatEnabled,
+                heartbeatIntervalMs,
                 this.nextIterators,
                 disConfig);
         this.fetcher = new Fetcher(this.disAsync,
