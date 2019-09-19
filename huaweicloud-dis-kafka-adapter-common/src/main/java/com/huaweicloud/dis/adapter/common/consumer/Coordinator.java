@@ -931,6 +931,7 @@ public class Coordinator {
 
     public boolean ensureGroupStable() {
         if (isStable()) {
+            activePeriodicHeartbeat(); // 激活定时心跳
             return true;
         } else {
             int loop = 0;
