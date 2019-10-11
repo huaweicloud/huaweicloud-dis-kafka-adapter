@@ -16,7 +16,7 @@
 package com.huaweicloud.dis.adapter.kafka.clients.producer;
 
 /**
- * A key/value pair to be sent to Kafka. This consists of a topic name to which the record is being sent, an optional
+ * A key/value pair to be sent to DIS. This consists of a topic name to which the record is being sent, an optional
  * partition number, and an optional key and value.
  * <p>
  * If a valid partition number is specified that partition will be used when sending the record. If no partition is
@@ -24,7 +24,7 @@ package com.huaweicloud.dis.adapter.kafka.clients.producer;
  * present a partition will be assigned in a round-robin fashion.
  * <p>
  * The record also has an associated timestamp. If the user did not provide a timestamp, the producer will stamp the
- * record with its current time. The timestamp eventually used by Kafka depends on the timestamp type configured for
+ * record with its current time. The timestamp eventually used by DIS depends on the timestamp type configured for
  * the topic.
  * <li>
  * If the topic is configured to use {@link com.huaweicloud.dis.adapter.kafka.common.record.TimestampType#CREATE_TIME CreateTime},
@@ -42,6 +42,7 @@ package com.huaweicloud.dis.adapter.kafka.clients.producer;
 public class ProducerRecord<K, V> {
 
     private final String topic;
+    private final String streamId;
     private final Integer partition;
     // comment by adapter
     // private final Headers headers;
@@ -53,14 +54,15 @@ public class ProducerRecord<K, V> {
      * Creates a record with a specified timestamp to be sent to a specified topic and partition
      * 
      * @param topic The topic the record will be appended to
+     * @param streamId The ID of stream the record will be appended to
      * @param partition The partition to which the record should be sent
      * @param timestamp The timestamp of the record
      * @param key The key that will be included in the record
      * @param value The record contents
      * // @param headers the headers that will be included in the record
      */
-    public ProducerRecord(String topic, Integer partition, Long timestamp, K key, V value) {
-        if (topic == null)
+    public ProducerRecord(String topic, String streamId, Integer partition, Long timestamp, K key, V value) {
+        if (topic == null && streamId == null)
             throw new IllegalArgumentException("Topic cannot be null.");
         if (timestamp != null && timestamp < 0)
             throw new IllegalArgumentException(
@@ -69,12 +71,26 @@ public class ProducerRecord<K, V> {
             throw new IllegalArgumentException(
                     String.format("Invalid partition: %d. Partition number should always be non-negative or null.", partition));
         this.topic = topic;
+        this.streamId = streamId;
         this.partition = partition;
         this.key = key;
         this.value = value;
         this.timestamp = timestamp;
         // comment by adapter
         // this.headers = new RecordHeaders(headers);
+    }
+
+    /**
+     * Creates a record with a specified timestamp to be sent to a specified topic and partition
+     *
+     * @param topic The topic the record will be appended to
+     * @param partition The partition to which the record should be sent
+     * @param timestamp The timestamp of the record
+     * @param key The key that will be included in the record
+     * @param value The record contents
+     */
+    public ProducerRecord(String topic, Integer partition, Long timestamp, K key, V value) {
+        this(topic, null, partition, timestamp, key, value);
     }
 
     // comment by adapter
@@ -114,18 +130,30 @@ public class ProducerRecord<K, V> {
      * @param value The record contents
      */
     public ProducerRecord(String topic, Integer partition, K key, V value) {
-        this(topic, partition, null, key, value);
+        this(topic, null, partition, null, key, value);
     }
     
     /**
-     * Create a record to be sent to Kafka
+     * Create a record to be sent to DIS
      * 
      * @param topic The topic the record will be appended to
      * @param key The key that will be included in the record
      * @param value The record contents
      */
     public ProducerRecord(String topic, K key, V value) {
-        this(topic, null, null, key, value);
+        this(topic, null, null, null, key, value);
+    }
+
+    /**
+     * Create a record with streamId to be sent to DIS
+     *
+     * @param topic The topic the record will be appended to
+     * @param streamId The ID of stream the record will be appended to
+     * @param key The key that will be included in the record
+     * @param value The record contents
+     */
+    public ProducerRecord(String topic, String streamId, K key, V value) {
+        this(topic, streamId, null, null, key, value);
     }
     
     /**
@@ -135,7 +163,7 @@ public class ProducerRecord<K, V> {
      * @param value The record contents
      */
     public ProducerRecord(String topic, V value) {
-        this(topic, null, null, null, value);
+        this(topic, null, null, null, null, value);
     }
 
     /**
@@ -143,6 +171,13 @@ public class ProducerRecord<K, V> {
      */
     public String topic() {
         return topic;
+    }
+
+    /**
+     * @return The streamId this record is being sent to
+     */
+    public String streamId() {
+        return streamId;
     }
 
     // comment by adapter

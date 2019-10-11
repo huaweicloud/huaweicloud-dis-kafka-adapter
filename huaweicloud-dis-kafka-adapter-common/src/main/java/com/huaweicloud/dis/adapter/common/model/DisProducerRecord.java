@@ -21,18 +21,20 @@ import java.nio.ByteBuffer;
 public final class DisProducerRecord {
 
     private final String stream;
+    private final String streamId;
     private final Integer partition;
     private final String key;
     private final ByteBuffer value;
     private final Long timestamp;
 
 
-    public DisProducerRecord(String stream, Integer partition, Long timestamp, String key, ByteBuffer value) {
-        if (stream == null)
+    public DisProducerRecord(String stream, String streamId, Integer partition, Long timestamp, String key, ByteBuffer value) {
+        if (stream == null && streamId == null)
             throw new IllegalArgumentException("Topic cannot be null");
         if (timestamp != null && timestamp < 0)
             throw new IllegalArgumentException("Invalid timestamp " + timestamp);
         this.stream = stream;
+        this.streamId = streamId;
         this.partition = partition;
         this.key = key;
         this.value = value;
@@ -40,18 +42,23 @@ public final class DisProducerRecord {
     }
 
 
+    public DisProducerRecord(String stream, Integer partition, Long timestamp, String key, ByteBuffer value) {
+        this(stream, null, partition, timestamp, key, value);
+    }
+
+
     public DisProducerRecord(String stream, Integer partition, String key, ByteBuffer value) {
-        this(stream, partition, null, key, value);
+        this(stream, null, partition, null, key, value);
     }
 
 
     public DisProducerRecord(String stream, String key, ByteBuffer value) {
-        this(stream, null, null, key, value);
+        this(stream, null, null, null, key, value);
     }
 
 
     public DisProducerRecord(String stream, ByteBuffer value) {
-        this(stream, null, null, null, value);
+        this(stream, null, null, null, null, value);
     }
 
 
@@ -59,6 +66,9 @@ public final class DisProducerRecord {
         return stream;
     }
 
+    public String streamId() {
+        return streamId;
+    }
 
     public String key() {
         return key;

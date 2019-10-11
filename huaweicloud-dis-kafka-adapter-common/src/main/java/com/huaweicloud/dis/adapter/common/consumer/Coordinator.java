@@ -491,8 +491,10 @@ public class Coordinator {
             commitCheckpointRequest.setCheckpointType(CheckpointTypeEnum.LAST_READ.name());
             commitCheckpointRequest.setSequenceNumber(String.valueOf(offset.getValue().offset()));
             commitCheckpointRequest.setAppName(groupId);
-            commitCheckpointRequest.setClientId(clintId);
-            commitCheckpointRequest.setGenerationId(generation.get());
+            if (subscriptions.partitionsAutoAssigned()) {
+                commitCheckpointRequest.setClientId(clintId);
+                commitCheckpointRequest.setGenerationId(generation.get());
+            }
             commitCheckpointRequest.setMetadata(offset.getValue().metadata());
             commitCheckpointRequest.setStreamName(streamPartition.stream());
             commitCheckpointRequest.setPartitionId(Utils.getShardIdStringFromPartitionId(streamPartition.partition()));

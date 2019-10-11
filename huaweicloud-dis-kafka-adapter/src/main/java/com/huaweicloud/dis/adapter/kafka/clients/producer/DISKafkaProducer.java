@@ -194,6 +194,7 @@ public class DISKafkaProducer<K, V> implements Producer<K, V> {
     public Future<RecordMetadata> send(ProducerRecord<K, V> record, final Callback callback) {
 
         String stream = record.topic();
+        String streamId = record.streamId();
         Integer partition = record.partition();
         Long timestamp = record.timestamp();
         String key = null;
@@ -226,7 +227,7 @@ public class DISKafkaProducer<K, V> implements Producer<K, V> {
         }
 
         Future<PutRecordsResult> putResultFuture =
-                disProducer.send(new DisProducerRecord(stream, partition, timestamp, key, value), produceCallback);
+                disProducer.send(new DisProducerRecord(stream, streamId, partition, timestamp, key, value), produceCallback);
         return new RecordMetadataFuture(stream, putResultFuture);
 
     }

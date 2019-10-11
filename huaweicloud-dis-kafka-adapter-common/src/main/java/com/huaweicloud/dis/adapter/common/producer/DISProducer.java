@@ -56,8 +56,10 @@ public class DISProducer extends AbstractAdapter implements IDISProducer {
     public Future<PutRecordsResult> send(DisProducerRecord record, final ProduceCallback callback) {
 
         String streamName = record.stream();
+        String streamId = record.streamId();
         PutRecordsRequest request = new PutRecordsRequest();
         request.setStreamName(streamName);
+        request.setStreamId(streamId);
 
         List<PutRecordsRequestEntry> recordEntries = new ArrayList<PutRecordsRequestEntry>();
 
