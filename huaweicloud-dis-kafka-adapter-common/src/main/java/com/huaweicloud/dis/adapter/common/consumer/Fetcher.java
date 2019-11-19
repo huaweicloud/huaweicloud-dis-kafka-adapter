@@ -113,7 +113,7 @@ public class Fetcher {
             if (futures.get(partition) == null) {
                 futures.put(partition, disAsync.getRecordsAsync(getRecordsParam, new AsyncHandler<GetRecordsResult>() {
                     @Override
-                    public void onError(Exception exception) {
+                    public void onError(Exception exception) throws Exception {
                         Integer errorCount = partitionException.get(partition);
                         if (errorCount == null) {
                             errorCount = 0;
@@ -126,6 +126,9 @@ public class Fetcher {
                         receivedCnt.getAndIncrement();
                         log.warn("Failed to getRecordsAsync, error : [{}], request : [{}]",
                                 exception.getMessage(), new String(Base64.getUrlDecoder().decode(getRecordsParam.getPartitionCursor())));
+
+                        // 将异常抛出，由外层处理
+                        throw exception;
                     }
 
                     @Override
@@ -178,7 +181,7 @@ public class Fetcher {
                                 log.warn("Find retriable error {}, errorCount {}", cause.getMessage(), (errorCount == null ? 1 : errorCount));
                                 if (errorCount == null) {
                                     partitionException.put(partition, 2);
-                                } else if (errorCount < 10) {
+                                } else if (errorCount < 5) {
                                     // tolerate N times failure
                                     partitionException.put(partition, (errorCount + 1));
                                 } else {

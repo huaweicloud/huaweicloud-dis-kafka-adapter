@@ -1113,7 +1113,7 @@ public class Coordinator {
             asyncCommitOffsetExecutor.shutdownNow();
         }
         if (heartbeatExecutor != null) {
-            heartbeatExecutor.shutdown();
+            heartbeatExecutor.shutdownNow();
         }
     }
 
