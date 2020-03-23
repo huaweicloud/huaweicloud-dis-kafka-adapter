@@ -109,6 +109,7 @@ public class Fetcher {
                 continue;
             }
             getRecordsParam.setPartitionCursor(nextIterators.get(partition).getNextPartitionCursor());
+            getRecordsParam.setAppName(disConfig.getGroupId());
 
             if (futures.get(partition) == null) {
                 futures.put(partition, disAsync.getRecordsAsync(getRecordsParam, new AsyncHandler<GetRecordsResult>() {
