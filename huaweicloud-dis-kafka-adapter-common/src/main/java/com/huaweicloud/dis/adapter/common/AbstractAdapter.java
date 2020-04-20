@@ -62,5 +62,9 @@ public abstract class AbstractAdapter {
         this.disAsync.updateCredentials(credentials);
     }
 
+    public void updateAuthToken(String authToken){
+        this.disAsync.updateAuthToken(authToken);
+    }
+
     protected abstract int getThreadPoolSize();
 }

@@ -1004,6 +1004,10 @@ public class Coordinator {
         innerDISClient.updateCredentials(credentials);
     }
 
+    public void updateAuthToken(String authToken){
+        innerDISClient.updateAuthToken(authToken);
+    }
+
     private class CommitOffsetThunk {
         private Map<StreamPartition, DisOffsetAndMetadata> offsets;
         private DisOffsetCommitCallback callback;
