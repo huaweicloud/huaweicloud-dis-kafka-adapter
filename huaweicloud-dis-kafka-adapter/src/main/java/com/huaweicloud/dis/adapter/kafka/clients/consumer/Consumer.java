@@ -189,4 +189,6 @@ public interface Consumer<K, V> extends Closeable {
      * @param credentials new credentials
      */
     public void updateCredentials(DISCredentials credentials);
+
+    public void updateAuthToken(String authToken);
 }

@@ -723,4 +723,8 @@ public class DISConsumer extends AbstractAdapter implements IDISConsumer {
         super.updateCredentials(credentials);
         coordinator.updateInnerClientCredentials(credentials);
     }
+
+    public void updateAuthToken(String authToken){
+        super.updateAuthToken(authToken);
+    }
 }

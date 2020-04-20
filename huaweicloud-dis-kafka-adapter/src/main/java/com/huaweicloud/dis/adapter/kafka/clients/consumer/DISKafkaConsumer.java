@@ -634,4 +634,8 @@ public class DISKafkaConsumer<K, V> implements Consumer<K, V> {
     public void updateCredentials(DISCredentials credentials) {
         disConsumer.updateCredentials(credentials);
     }
+
+    public void updateAuthToken(String authToken){
+        disConsumer.updateAuthToken(authToken);
+    }
 }
