@@ -19,3 +19,7 @@
 # 1.2.7
 - Features
   * Add periodic heartbeat configuration, and use periodic heartbeat by default
+  
+# 1.2.11
+- Bugs
+  * 修复关闭消费者时定时心跳线程和异步提交 Offset 线程无法关闭的问题

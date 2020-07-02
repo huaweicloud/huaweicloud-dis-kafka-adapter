@@ -710,7 +710,7 @@ public class DISConsumer extends AbstractAdapter implements IDISConsumer {
 
     @Override
     protected int getThreadPoolSize() {
-        return config.getInt(DisConsumerConfig.MAX_FETCH_THREADS_CONFIG, 50);
+        return config.getInt(DisConsumerConfig.MAX_FETCH_THREADS_CONFIG, 20);
     }
 
     /**
