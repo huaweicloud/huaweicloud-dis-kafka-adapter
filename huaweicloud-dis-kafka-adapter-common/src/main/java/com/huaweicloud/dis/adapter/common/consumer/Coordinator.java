@@ -216,6 +216,7 @@ public class Coordinator {
             if (state == ClientState.STABLE && heartbeatResponse.getState() != HeartbeatResponse.HeartBeatResponseState.STABLE) {
                 subscriptions.listener().onPartitionsRevoked(new HashSet<>(subscriptions.assignedPartitions()));
                 subscriptions.needReassignment();
+                subscriptions.needRefreshCommits();
                 log.info("Start to rejoin group [{}] because of status changes to [{}]", groupId, heartbeatResponse.getState());
             }
             //assignment completed

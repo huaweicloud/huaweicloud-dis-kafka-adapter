@@ -23,3 +23,7 @@
 # 1.2.11
 - Bugs
   * 修复关闭消费者时定时心跳线程和异步提交 Offset 线程无法关闭的问题
+  
+# 1.2.13
+- Bugs
+  * 修复 Rebalance 时直接 rejoin 的消费者没有从服务端同步 Checkpoint 的问题

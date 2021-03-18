@@ -15,6 +15,7 @@
  */
 package com.huaweicloud.dis.adapter.kafka.clients.producer;
 
+import com.huaweicloud.dis.Constants;
 import com.huaweicloud.dis.DISConfig;
 import com.huaweicloud.dis.adapter.common.Utils;
 import com.huaweicloud.dis.adapter.common.model.DisProducerRecord;
@@ -235,7 +236,10 @@ public class DISKafkaProducer<K, V> implements Producer<K, V> {
     private RecordMetadata buildRecordMetadata(String streamName, PutRecordsResult result) {
         PutRecordsResultEntry resultEntry = result.getRecords().get(0);
 
-        if (!StringUtils.isNullOrEmpty(resultEntry.getErrorCode())) {
+        // 流控时，不需要抛出异常
+        if (!StringUtils.isNullOrEmpty(resultEntry.getErrorCode())
+            && !Constants.ERROR_CODE_TRAFFIC_CONTROL_LIMIT.equals(
+            resultEntry.getErrorCode())) {
             throw new RuntimeException(resultEntry.getErrorCode());
         }
 
