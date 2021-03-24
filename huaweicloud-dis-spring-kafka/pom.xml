@@ -21,7 +21,7 @@ under the License.
     <parent>
         <groupId>com.huaweicloud.dis</groupId>
         <artifactId>huaweicloud-dis-kafka-adapter-pom</artifactId>
-        <version>1.2.13-SNAPSHOT</version>
+        <version>1.2.13</version>
     </parent>
     <artifactId>huaweicloud-dis-spring-kafka</artifactId>
     <packaging>jar</packaging>
