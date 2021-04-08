@@ -27,3 +27,7 @@
 # 1.2.13
 - Bugs
   * 修复 Rebalance 时直接 rejoin 的消费者没有从服务端同步 Checkpoint 的问题
+  
+# 1.2.14
+- Features
+  * add kafka clients 2.1.1 supports

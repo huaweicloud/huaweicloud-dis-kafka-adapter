@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <parent>
+        <groupId>com.huaweicloud.dis</groupId>
+        <artifactId>huaweicloud-dis-kafka-adapter-pom</artifactId>
+        <version>1.2.14-SNAPSHOT</version>
+    </parent>
+    <modelVersion>4.0.0</modelVersion>
+    <artifactId>huaweicloud-dis-kafka-adapter-2.1.1</artifactId>
+    <packaging>jar</packaging>
+    <name>huaweicloud-dis-kafka-adapter-2.1.1</name>
+    <url>https://www.huaweicloud.com/product/dis.html</url>
+    <description>Huawei Cloud Data Ingestion Service Kafka Adapter</description>
+    <developers>
+        <developer>
+            <id>huaweicloud</id>
+            <organization>Huawei Cloud</organization>
+            <organizationUrl>https://huaweicloud.com</organizationUrl>
+            <roles>
+                <role>developer</role>
+            </roles>
+        </developer>
+    </developers>
+
+    <properties>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <maven.compiler.source>1.8</maven.compiler.source>
+        <maven.compiler.target>1.8</maven.compiler.target>
+    </properties>
+
+    <dependencies>
+        <dependency>
+            <groupId>com.huaweicloud.dis</groupId>
+            <artifactId>huaweicloud-sdk-java-dis</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>com.huaweicloud.dis</groupId>
+            <artifactId>huaweicloud-dis-kafka-adapter-common</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.apache.kafka</groupId>
+            <artifactId>kafka-clients</artifactId>
+            <version>2.1.1</version>
+        </dependency>
+
+        <dependency>
+            <groupId>junit</groupId>
+            <artifactId>junit</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+
+</project>
