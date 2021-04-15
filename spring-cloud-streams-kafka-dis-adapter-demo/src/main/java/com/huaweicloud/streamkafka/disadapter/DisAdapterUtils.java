@@ -7,11 +7,11 @@ public class DisAdapterUtils
     
     public static DISConfig buildDisConfig(){
         return new DISConfig()
-        .setEndpoint("https://128.10.96.207:21241")
-        .set("manager.endpoint", "https://128.10.96.207:21102")
-        .setAK("CWQCEIGWRDFYNYTHXVBD")
-        .setSK("hWGwgAsWdqinap7TlgYiqxsGGtP2rADP9UXWPNlV")
-        .setProjectId("2fdbbc096fb0420489021acc8b802105")
+        .setEndpoint("YOUR_ENDPOINT")
+        .set("manager.endpoint", "YOUR_ENDPOINT")
+        .setAK("YOUR_AK")
+        .setSK("YOUR_SK")
+        .setProjectId("YOUR_PROJECTID")
         .setRegion("southchina")
         .set("key.serializer", "org.apache.kafka.common.serialization.ByteArraySerializer")
         .set("value.serializer", "org.apache.kafka.common.serialization.ByteArraySerializer")
