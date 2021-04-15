@@ -46,7 +46,7 @@ public class BeanConfiguration {
     @Bean
     public Map<String, Object> producerConfigs() {
         Map<String, Object> props = new HashMap<>();
-        props.put("bootstrap.servers", "128.10.47.24:22005");
+        props.put("bootstrap.servers", "YOUR_BOOTSTRAP");
         props.put("group.id","group");
         props.put("acks", "all");
         props.put("retries", "2");
