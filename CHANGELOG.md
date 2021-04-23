@@ -31,3 +31,7 @@
 # 1.2.14
 - Features
   * add kafka clients 2.1.1 supports
+  
+# 1.2.15
+- Features
+  * 支持通过配置`rebalance.timeout.ms`参数来配置加入消费组的超时时间
