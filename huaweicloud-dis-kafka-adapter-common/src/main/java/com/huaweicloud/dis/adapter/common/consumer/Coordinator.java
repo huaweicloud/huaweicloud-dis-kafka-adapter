@@ -84,6 +84,8 @@ public class Coordinator {
 
     private long heartbeatIntervalMs;
 
+    private long rebalanceTimeoutMs;
+
     private boolean accelerateAssignEnabled;
 
     private Map<String, List<Integer>> assignment;
@@ -123,6 +125,7 @@ public class Coordinator {
                        long autoCommitIntervalMs,
                        Boolean periodicHeartbeatEnabled,
                        long heartbeatIntervalMs,
+                       long rebalanceTimeoutMs,
                        ConcurrentHashMap<StreamPartition, PartitionCursor> nextIterators,
                        DISConfig disConfig) {
         this.disAsync = disAsync;
@@ -157,6 +160,7 @@ public class Coordinator {
 
         this.periodicHeartbeatEnabled = periodicHeartbeatEnabled;
         this.heartbeatIntervalMs = heartbeatIntervalMs;
+        this.rebalanceTimeoutMs = rebalanceTimeoutMs;
 
         this.accelerateAssignEnabled = Boolean.valueOf(disConfig.get(DisConsumerConfig.ENABLE_ACCELERATE_ASSIGN_CONFIG, "false"));
     }
@@ -341,6 +345,7 @@ public class Coordinator {
         joinGroupRequest.setClientId(clintId);
         joinGroupRequest.setGroupId(groupId);
         joinGroupRequest.setAccelerateAssignEnabled(this.accelerateAssignEnabled);
+        joinGroupRequest.setRebalanceTimeoutMs(this.rebalanceTimeoutMs);
         if (subscriptions.hasPatternSubscription()) {
             joinGroupRequest.setStreamPattern(subscriptions.getSubscribedPattern().pattern());
         } else {

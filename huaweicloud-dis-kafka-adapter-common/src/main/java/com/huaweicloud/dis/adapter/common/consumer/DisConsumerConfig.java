@@ -56,4 +56,9 @@ public class DisConsumerConfig extends DISConfig {
      * 是否开启分配加速，默认不开启，建议只有单个Consumer时开启
      */
     public static final String ENABLE_ACCELERATE_ASSIGN_CONFIG = "enable.accelerate.assign";
+
+    /**
+     * 加入消费组的超时时间
+     */
+    public static final String REBALANCE_TIMEOUT_MS_CONFIG = "rebalance.timeout.ms";
 }
