@@ -412,6 +412,9 @@ public class Coordinator {
                     assignment = Collections.emptyMap();
                 }
                 this.generation.set(syncGroupResponse.getGeneration());
+                if (this.state != ClientState.STABLE && this.state != ClientState.SYNCING) {
+                    this.state = ClientState.SYNCING;
+                }
                 return;
             case WAITING:
                 log.info("[SYNC] ReSync group [{}], clientId [{}]", groupId, clintId);
@@ -1094,7 +1097,6 @@ public class Coordinator {
                     }
 
                     if (state == ClientState.STABLE || state == ClientState.SYNCING) {
-                        Thread.sleep(heartbeatIntervalMs);
 
                         try {
                             long begin = System.currentTimeMillis();
@@ -1115,6 +1117,8 @@ public class Coordinator {
                         } catch (Exception e) {
                             log.error("Failed to invoke heartbeat request, errorInfo [{}]", e.getMessage(), e);
                         }
+
+                        Thread.sleep(heartbeatIntervalMs);
                     }
                 }
             } catch (InterruptedException e) {

@@ -35,3 +35,7 @@
 # 1.2.15
 - Features
   * 支持通过配置`rebalance.timeout.ms`参数来配置加入消费组的超时时间
+  
+# 1.2.16
+- Bugs
+  * 修复部分 Rebalance 场景下定时心跳线程占用 CPU 过高的问题
