@@ -1118,8 +1118,8 @@ public class Coordinator {
                             log.error("Failed to invoke heartbeat request, errorInfo [{}]", e.getMessage(), e);
                         }
 
-                        Thread.sleep(heartbeatIntervalMs);
                     }
+                    Thread.sleep(heartbeatIntervalMs);
                 }
             } catch (InterruptedException e) {
                 Thread.interrupted();
