@@ -12,10 +12,6 @@
 - Features
   * add common adapter
 
-# 1.2.3
-- Features
-  * use huaweicloud-sdk-dis-java 1.3.4 version
-
 # 1.2.7
 - Features
   * Add periodic heartbeat configuration, and use periodic heartbeat by default

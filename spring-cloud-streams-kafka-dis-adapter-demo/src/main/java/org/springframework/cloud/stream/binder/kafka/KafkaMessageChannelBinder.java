@@ -80,8 +80,8 @@ import org.springframework.util.StringUtils;
 import org.springframework.util.concurrent.ListenableFuture;
 import org.springframework.util.concurrent.ListenableFutureCallback;
 
-import com.huaweicloud.streamkafka.disadapter.DISKafkaConsumerFactory;
-import com.huaweicloud.streamkafka.disadapter.DISKafkaProducerFactory;
+import com.cloud.streamkafka.disadapter.DISKafkaConsumerFactory;
+import com.cloud.streamkafka.disadapter.DISKafkaProducerFactory;
 
 /*
  * 在原代码基础上，只是把KafkaProducerFactory和KafkaConsumerFactory替换为DISKafkaProducerFactory和DISKafkaConsumerFactory

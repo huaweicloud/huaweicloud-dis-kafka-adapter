@@ -3,7 +3,7 @@
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
-    <groupId>com.huaweicloud.dis</groupId>
+    <groupId>io.github.cloud-dis-sdk</groupId>
     <artifactId>spring-cloud-streams-kafka-dis-adapter-demoss</artifactId>
     <version>1.2.18-SNAPSHOT</version>
 
@@ -68,16 +68,9 @@
         </dependency>
 
         <dependency>
-            <groupId>com.huaweicloud.dis</groupId>
-            <artifactId>huaweicloud-dis-kafka-adapter-0.11</artifactId>
+            <groupId>io.github.cloud-dis-sdk</groupId>
+            <artifactId>cloud-dis-kafka-adapter-0.11</artifactId>
             <version>1.2.18-SNAPSHOT</version>
-        </dependency>
-
-        <!-- hot reload - press Ctrl+F9 in IntelliJ after a code change while application is running -->
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-devtools</artifactId>
-            <optional>true</optional>
         </dependency>
     </dependencies>
 

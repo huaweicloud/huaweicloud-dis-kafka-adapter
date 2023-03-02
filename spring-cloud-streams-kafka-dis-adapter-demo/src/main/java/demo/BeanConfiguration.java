@@ -7,8 +7,8 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.kafka.core.ConsumerFactory;
 import org.springframework.kafka.core.ProducerFactory;
 
-import com.huaweicloud.streamkafka.disadapter.DISKafkaConsumerFactory;
-import com.huaweicloud.streamkafka.disadapter.DISKafkaProducerFactory;
+import com.cloud.streamkafka.disadapter.DISKafkaConsumerFactory;
+import com.cloud.streamkafka.disadapter.DISKafkaProducerFactory;
 
 @Configuration
 public class BeanConfiguration
