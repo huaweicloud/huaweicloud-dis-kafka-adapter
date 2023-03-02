@@ -1,10 +1,6 @@
-# Huawei Cloud DIS Kafka Adapter
+# Cloud DIS Kafka Adapter
 
-The Huawei Cloud DIS Kafka Adapter help Java developers to easily migrate from Kafka to [Huawei Cloud DIS](https://www.huaweicloud.com/en-us/product/dis.html) using [DIS Java SDK](https://github.com/huaweicloud/huaweicloud-sdk-java-dis). You can get started in minutes using **Maven**.
-
-Quick Links:
-- issue
-- [DIS Homepage](https://www.huaweicloud.com/en-us/product/dis.html), or Chinese language site [数据接入服务](https://www.huaweicloud.com/product/dis.html)
+The Cloud DIS Kafka Adapter help Java developers to easily migrate from Kafka to [Cloud DIS] using DIS Java SDK. You can get started in minutes using **Maven**.
 
 ## Getting Started
 ### Requirements
@@ -15,9 +11,9 @@ The recommended way to use the DIS Kafka Adapter in your project is to consume i
 
 #### Specify the SDK Maven dependency
     <dependency>
-        <groupId>com.huaweicloud.dis</groupId>
-        <artifactId>huaweicloud-dis-kafka-adapter</artifactId>
-        <version>1.2.17</version>
+        <groupId>io.github.cloud-dis-sdk</groupId>
+        <artifactId>cloud-dis-kafka-adapter</artifactId>
+        <version>1.2.18</version>
         <scope>compile</scope>
     </dependency>
 

@@ -19,19 +19,13 @@ under the License.
     xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
-    <groupId>com.huaweicloud.dis</groupId>
-    <artifactId>huaweicloud-dis-kafka-adapter-pom</artifactId>
+    <groupId>io.github.cloud-dis-sdk</groupId>
+    <artifactId>cloud-dis-kafka-adapter-pom</artifactId>
     <version>1.2.18-SNAPSHOT</version>
     <packaging>pom</packaging>
 
-    <name>huaweicloud-dis-kafka-adapter-pom</name>
-    <url>https://www.huaweicloud.com/product/dis.html</url>
-    <description>Huawei Cloud Data Ingestion Service Kafka Adapter</description>
-    <scm>
-        <connection>scm:git:https://github.com/huaweicloud/huaweicloud-dis-kafka-adapter.git</connection>
-        <developerConnection>scm:git:git@github.com:huaweicloud/huaweicloud-dis-kafka-adapter.git</developerConnection>
-        <url>https://github.com/huaweicloud/huaweicloud-dis-kafka-adapter</url>
-    </scm>
+    <name>cloud-dis-kafka-adapter-pom</name>
+    <description>Cloud Data Ingestion Service Kafka Adapter</description>
     <licenses>
         <license>
             <name>Apache 2.0 License</name>
@@ -39,31 +33,21 @@ under the License.
             <distribution>repo</distribution>
         </license>
     </licenses>
-    <developers>
-        <developer>
-            <id>huaweicloud</id>
-            <organization>Huawei Cloud</organization>
-            <organizationUrl>https://huaweicloud.com</organizationUrl>
-            <roles>
-                <role>developer</role>
-            </roles>
-        </developer>
-    </developers>
 
     <!-- Modules -->
     <modules>
-        <module>huaweicloud-dis-kafka-adapter-common</module>
-        <module>huaweicloud-dis-kafka-adapter</module>
-        <module>huaweicloud-dis-kafka-adapter-0.10</module>
-        <module>huaweicloud-dis-kafka-adapter-0.11</module>
-        <module>huaweicloud-dis-kafka-adapter-1.1.0</module>
-        <module>huaweicloud-dis-kafka-adapter-2.1.1</module>
-        <module>huaweicloud-dis-spring-kafka</module>
+        <module>cloud-dis-kafka-adapter-common</module>
+        <module>cloud-dis-kafka-adapter</module>
+        <module>cloud-dis-kafka-adapter-0.10</module>
+        <module>cloud-dis-kafka-adapter-0.11</module>
+        <module>cloud-dis-kafka-adapter-1.1.0</module>
+        <module>cloud-dis-kafka-adapter-2.1.1</module>
+        <module>cloud-dis-spring-kafka</module>
     </modules>
 
     <properties>
-        <huaweicloud-dis-kafka-adapter.version>${project.version}</huaweicloud-dis-kafka-adapter.version>
-        <huaweicloud-sdk-java-dis.version>1.3.14</huaweicloud-sdk-java-dis.version>
+        <cloud-dis-kafka-adapter.version>${project.version}</cloud-dis-kafka-adapter.version>
+        <cloud-sdk-java-dis.version>1.3.15-SNAPSHOT</cloud-sdk-java-dis.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <maven.compiler.source>1.8</maven.compiler.source>
         <maven.compiler.target>1.8</maven.compiler.target>
@@ -72,25 +56,25 @@ under the License.
     <distributionManagement>
         <snapshotRepository>
             <id>oss-snapshot</id>
-            <url>https://oss.sonatype.org/content/repositories/snapshots</url>
+            <url>https://s01.oss.sonatype.org/content/repositories/snapshots</url>
         </snapshotRepository>
         <repository>
             <id>oss-release</id>
-            <url>https://oss.sonatype.org/</url>
+            <url>https://s01.oss.sonatype.org/</url>
         </repository>
     </distributionManagement>
 
     <dependencyManagement>
         <dependencies>
             <dependency>
-                <groupId>com.huaweicloud.dis</groupId>
-                <artifactId>huaweicloud-sdk-java-dis</artifactId>
-                <version>${huaweicloud-sdk-java-dis.version}</version>
+                <groupId>io.github.cloud-dis-sdk</groupId>
+                <artifactId>cloud-sdk-java-dis</artifactId>
+                <version>${cloud-sdk-java-dis.version}</version>
             </dependency>
             <dependency>
-                <groupId>com.huaweicloud.dis</groupId>
-                <artifactId>huaweicloud-dis-kafka-adapter-common</artifactId>
-                <version>${huaweicloud-dis-kafka-adapter.version}</version>
+                <groupId>io.github.cloud-dis-sdk</groupId>
+                <artifactId>cloud-dis-kafka-adapter-common</artifactId>
+                <version>${cloud-dis-kafka-adapter.version}</version>
             </dependency>
             <dependency>
                 <groupId>junit</groupId>
