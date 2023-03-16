@@ -25,14 +25,30 @@ under the License.
     <packaging>pom</packaging>
 
     <name>cloud-dis-kafka-adapter-pom</name>
+	<url>https://www.cloud.com/product/dis.html</url>
     <description>Cloud Data Ingestion Service Kafka Adapter</description>
-    <licenses>
+    <scm>
+        <connection>scm:git:https://github.com/cloud/cloud-dis-kafka-adapter.git</connection>
+        <developerConnection>scm:git:git@github.com:cloud/cloud-dis-kafka-adapter.git</developerConnection>
+        <url>https://github.com/cloud/cloud-dis-kafka-adapter</url>
+    </scm>
+	<licenses>
         <license>
             <name>Apache 2.0 License</name>
             <url>http://www.apache.org/licenses/LICENSE-2.0.html</url>
             <distribution>repo</distribution>
         </license>
     </licenses>
+	<developers>
+        <developer>
+            <id>cloud</id>
+            <organization>Cloud</organization>
+            <organizationUrl>https://cloud.com</organizationUrl>
+            <roles>
+                <role>developer</role>
+            </roles>
+        </developer>
+    </developers>
 
     <!-- Modules -->
     <modules>
