@@ -21,7 +21,7 @@ under the License.
     <parent>
         <groupId>io.github.cloud-dis-sdk</groupId>
         <artifactId>cloud-dis-kafka-adapter-pom</artifactId>
-        <version>1.2.18-SNAPSHOT</version>
+        <version>1.2.18</version>
     </parent>
     <artifactId>cloud-dis-spring-kafka</artifactId>
     <packaging>jar</packaging>
