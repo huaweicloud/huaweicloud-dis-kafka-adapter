@@ -21,7 +21,7 @@ under the License.
 
     <groupId>io.github.cloud-dis-sdk</groupId>
     <artifactId>cloud-dis-kafka-adapter-demo</artifactId>
-    <version>1.2.18-SNAPSHOT</version>
+    <version>1.2.18</version>
     <packaging>jar</packaging>
 
     <name>cloud-dis-kafka-adapter-demo</name>
@@ -37,7 +37,7 @@ under the License.
         <dependency>
             <groupId>io.github.cloud-dis-sdk</groupId>
             <artifactId>cloud-dis-kafka-adapter</artifactId>
-            <version>1.2.18-SNAPSHOT</version>
+            <version>1.2.18</version>
         </dependency>
 
         <!-- log4j2 -->
