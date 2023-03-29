@@ -42,7 +42,7 @@ public class DISKafkaConsumerSubscribeDemo {
         props.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, OffsetResetStrategy.LATEST.name());
 
         // 默认情况下不需要设置endpoint，会自动使用域名访问；如需使用指定的endpoint，解除如下注释并设置endpoint即可
-        // props.setProperty(DISConfig.PROPERTY_ENDPOINT, "https://dis-cn-north-1.myhuaweicloud.com");
+        // props.setProperty(DISConfig.PROPERTY_ENDPOINT, "https://dis.cn-north-1.myhuaweicloud.com");
 
         Consumer<String, String> consumer = new DISKafkaConsumer<>(props);
         // 使用subscribe模式，指定需要消费的通道名即可
