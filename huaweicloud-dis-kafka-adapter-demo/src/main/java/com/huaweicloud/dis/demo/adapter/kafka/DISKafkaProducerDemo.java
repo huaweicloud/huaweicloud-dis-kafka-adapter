@@ -35,7 +35,7 @@ public class DISKafkaProducerDemo {
         props.setProperty(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
 
         // 默认情况下不需要设置endpoint，会自动使用域名访问；如需使用指定的endpoint，解除如下注释并设置endpoint即可
-        // props.setProperty(DISConfig.PROPERTY_ENDPOINT, "https://dis-cn-north-1.myhuaweicloud.com");
+        // props.setProperty(DISConfig.PROPERTY_ENDPOINT, "https://dis.cn-north-1.myhuaweicloud.com");
 
         // 创建Producer，多个线程可共用同一个producer
         Producer<String, String> producer = new DISKafkaProducer<>(props);
