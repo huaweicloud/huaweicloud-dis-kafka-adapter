@@ -28,7 +28,7 @@ public class DISKafkaConsumerSubscribePatternDemo {
         // 消费组ID，用于记录offset和进行group rebalance
         String groupId = "YOU_GROUP_ID";
         // DIS region
-        String region = "cn-north-1";
+        String region = "your region";
 
         Properties props = new Properties();
         props.setProperty(DISConfig.PROPERTY_AK, ak);

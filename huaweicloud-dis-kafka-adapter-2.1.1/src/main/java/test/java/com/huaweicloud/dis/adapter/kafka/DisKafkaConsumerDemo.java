@@ -60,11 +60,10 @@ public class DisKafkaConsumerDemo {
         // disConfig.set("IS_DEFAULT_TRUSTED_JKS_ENABLED", "false");
         disConfig.set("group.id", "zzz");
         disConfig.set("enable.auto.commit", "false");
-        disConfig.set("ak","EBJUICZGRRVWZKUJBMBJ");
-        disConfig.set("sk","NEykSk7nQA0tzGNoN7ngxh5lJUFYF5OaRyFnZnFG");
-        disConfig.set("projectId","25d4ea94a2c14688afc5114fe6b333df");
-        disConfig.set("region","cn-north-7");
-        // disConfig.set("endpoint","https://dis.cn-north-7.myhuaweicloud.com");
+        disConfig.set("ak","your ak");
+        disConfig.set("sk","your sk");
+        disConfig.set("projectId","your projectID");
+        disConfig.set("region","your region");
 
         //DISConfig disConfig = DISConfig.buildDefaultConfig();
         try (Consumer<String, String> disConsumer = new DISKafkaConsumer<String, String>(disConfig)) {
@@ -114,10 +113,10 @@ public class DisKafkaConsumerDemo {
         // disConfig.set("IS_DEFAULT_TRUSTED_JKS_ENABLED", "false");
         disConfig.set("group.id", "zzz");
         disConfig.set("enable.auto.commit", "false");
-        disConfig.set("ak","EBJUICZGRRVWZKUJBMBJ");
-        disConfig.set("sk","NEykSk7nQA0tzGNoN7ngxh5lJUFYF5OaRyFnZnFG");
-        disConfig.set("projectId","25d4ea94a2c14688afc5114fe6b333df");
-        disConfig.set("region","cn-north-7");
+        disConfig.set("ak","your ak");
+        disConfig.set("sk","your sk");
+        disConfig.set("projectId","your projectId");
+        disConfig.set("region","your region");
         try (Consumer<String, String> disConsumer = new DISKafkaConsumer<String, String>(disConfig)) {
             List<PartitionInfo> partitionInfos = disConsumer.partitionsFor("dis-gzl0630");
             for (PartitionInfo partitionInfo : partitionInfos) {
@@ -153,10 +152,10 @@ public class DisKafkaConsumerDemo {
         disConfig.set("IS_DEFAULT_TRUSTED_JKS_ENABLED", "false");
         disConfig.set("group.id", "zzz");
         disConfig.set("enable.auto.commit", "false");
-        disConfig.set("ak","EBJUICZGRRVWZKUJBMBJ");
-        disConfig.set("sk","NEykSk7nQA0tzGNoN7ngxh5lJUFYF5OaRyFnZnFG");
-        disConfig.set("projectId","25d4ea94a2c14688afc5114fe6b333df");
-        disConfig.set("region","cn-north-7");
+        disConfig.set("ak","your ak");
+        disConfig.set("sk","your sk");
+        disConfig.set("projectId","your projectId");
+        disConfig.set("region","your region");
         /*
             enable.auto.commit 与 auto.commit.interval.ms一起使用，auto.commit.interval.ms表示按周期提交checkpoint的时间，
             客户端会尽力按照这个时间提交checkpoint， 需要在数据库检查checkpoint的提交
@@ -415,10 +414,10 @@ public class DisKafkaConsumerDemo {
         disConfig.set("IS_DEFAULT_TRUSTED_JKS_ENABLED", "false");
         disConfig.set("group.id", "zzz");
         disConfig.set("enable.auto.commit", "false");
-        disConfig.set("ak","EBJUICZGRRVWZKUJBMBJ");
-        disConfig.set("sk","NEykSk7nQA0tzGNoN7ngxh5lJUFYF5OaRyFnZnFG");
-        disConfig.set("projectId","25d4ea94a2c14688afc5114fe6b333df");
-        disConfig.set("region","cn-north-7");
+        disConfig.set("ak","your ak");
+        disConfig.set("sk","your sk");
+        disConfig.set("projectId","your projectId");
+        disConfig.set("region","your region");
 
         log.info("groupId " + disConfig.getGroupId());
         Consumer<String, String> disConsumer = new DISKafkaConsumer<String, String>(disConfig);

@@ -28,7 +28,7 @@ public class DISKafkaConsumerAssignDemo {
         // 消费组ID，用于记录offset
         String groupId = "YOU_GROUP_ID";
         // DIS region
-        String region = "cn-north-1";
+        String region = "your region";
 
         Properties props = new Properties();
         props.setProperty(DISConfig.PROPERTY_AK, ak);

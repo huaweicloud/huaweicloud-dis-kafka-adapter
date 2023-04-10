@@ -24,7 +24,7 @@ public class DISKafkaProducerDemo {
         // YOU DIS Stream
         String streamName = "YOU_STREAM_NAME";
         // DIS region
-        String region = "cn-north-1";
+        String region = "your region";
 
         Properties props = new Properties();
         props.setProperty(DISConfig.PROPERTY_AK, ak);
