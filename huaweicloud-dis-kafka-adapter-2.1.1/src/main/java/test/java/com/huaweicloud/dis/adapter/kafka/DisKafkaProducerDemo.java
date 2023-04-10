@@ -34,10 +34,10 @@ public class DisKafkaProducerDemo {
         disConfig.set("IS_DEFAULT_TRUSTED_JKS_ENABLED", "false");
         disConfig.set("group.id", "zzz");
         disConfig.set("enable.auto.commit", "false");
-        disConfig.set("ak","EBJUICZGRRVWZKUJBMBJ");
-        disConfig.set("sk","NEykSk7nQA0tzGNoN7ngxh5lJUFYF5OaRyFnZnFG");
-        disConfig.set("projectId","25d4ea94a2c14688afc5114fe6b333df");
-        disConfig.set("region","cn-north-7");
+        disConfig.set("ak","your ak");
+        disConfig.set("sk","your sk");
+        disConfig.set("projectId","your projectId");
+        disConfig.set("region","your region");
 
         Producer<String, byte[]> disKafkaProducer = new DISKafkaProducer<>(disConfig);
 

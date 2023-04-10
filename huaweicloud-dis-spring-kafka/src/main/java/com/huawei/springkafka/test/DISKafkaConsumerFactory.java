@@ -93,13 +93,13 @@ public class DISKafkaConsumerFactory<K, V> implements ConsumerFactory<K, V>, Cli
 
     protected Consumer<K, V> createKafkaConsumer(Map<String, Object> configs) {
         DISConfig config = new DISConfig();
-        config.set("group.id", "group");
-        config.setEndpoint("https://10.40.48.158:21250");
-        config.setProperty("manager.endpoint", "https://10.40.48.158:21250");
-        config.setAK("CWQCEIGWRDFYNYTHXVBD");
-        config.setSK("hWGwgAsWdqinap7TlgYiqxsGGtP2rADP9UXWPNlV");
-        config.setProjectId("2fdbbc096fb0420489021acc8b802105");
-        config.setRegion("southchina");
+        config.set("group.id", "group name");
+        config.setEndpoint("your endpoint");
+        config.setProperty("manager.endpoint", "your manager endpoint");
+        config.setAK("your ak");
+        config.setSK("your sk");
+        config.setProjectId("your projectId");
+        config.setRegion("your region");
         
         return new DISKafkaConsumer(config);
     }
