@@ -61,4 +61,14 @@ public class DisConsumerConfig extends DISConfig {
      * 加入消费组的超时时间
      */
     public static final String REBALANCE_TIMEOUT_MS_CONFIG = "rebalance.timeout.ms";
+
+    /**
+     * 每次获取最大记录条数
+     */
+    public static final String GET_RECORDS_MAX_LIMIT = "limit";
+
+    /**
+     * 设置每次获取最大字节数
+     */
+    public static final String GET_RECORDS_MAX_BYTES = "max_fetch_bytes";
 }

@@ -21,6 +21,7 @@ import com.huaweicloud.dis.DISConfig;
 import com.huaweicloud.dis.adapter.common.Utils;
 import com.huaweicloud.dis.adapter.common.model.StreamPartition;
 import com.huaweicloud.dis.core.handler.AsyncHandler;
+import com.huaweicloud.dis.core.util.StringUtils;
 import com.huaweicloud.dis.exception.DISClientException;
 import com.huaweicloud.dis.exception.DISPartitionExpiredException;
 import com.huaweicloud.dis.exception.DISPartitionNotExistsException;
@@ -110,6 +111,18 @@ public class Fetcher {
             }
             getRecordsParam.setPartitionCursor(nextIterators.get(partition).getNextPartitionCursor());
             // getRecordsParam.setAppName(disConfig.getGroupId());
+
+            // 设置每次获取最大记录条数
+            String maxRecordsLimit = disConfig.getProperty(DisConsumerConfig.GET_RECORDS_MAX_LIMIT);
+            if (!StringUtils.isNullOrEmpty(maxRecordsLimit)) {
+                getRecordsParam.setLimit(Integer.parseInt(maxRecordsLimit));
+            }
+
+            // 设置每次获取最大字节数
+            String maxBytesLimit = disConfig.getProperty(DisConsumerConfig.GET_RECORDS_MAX_BYTES);
+            if (!StringUtils.isNullOrEmpty(maxBytesLimit)) {
+                getRecordsParam.setMaxFetchBytes(Long.parseLong(maxBytesLimit));
+            }
 
             if (futures.get(partition) == null) {
                 futures.put(partition, disAsync.getRecordsAsync(getRecordsParam, new AsyncHandler<GetRecordsResult>() {
