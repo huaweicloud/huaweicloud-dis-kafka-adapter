@@ -39,3 +39,7 @@
 # 1.2.16
 - Bugs
   * 修复部分 Rebalance 场景下定时心跳线程占用 CPU 过高的问题
+
+# 1.2.18
+- Bugfixs
+  * 下载数据接口，当app不为null时，添加app参数

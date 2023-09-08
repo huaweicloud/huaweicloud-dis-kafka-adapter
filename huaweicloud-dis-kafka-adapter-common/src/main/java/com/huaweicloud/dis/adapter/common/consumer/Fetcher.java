@@ -42,19 +42,19 @@ public class Fetcher {
 
     private static final Logger log = LoggerFactory.getLogger(Fetcher.class);
 
-    private DISConfig disConfig;
+    private final DISConfig disConfig;
 
-    private DISAsync disAsync;
+    private final DISAsync disAsync;
 
-    private ConcurrentHashMap<StreamPartition, PartitionCursor> nextIterators;
+    private final ConcurrentHashMap<StreamPartition, PartitionCursor> nextIterators;
 
-    private SubscriptionState subscriptions;
+    private final SubscriptionState subscriptions;
 
-    private AtomicInteger receivedCnt;
+    private final AtomicInteger receivedCnt;
 
-    private Map<StreamPartition, Future<GetRecordsResult>> futures;
+    private final Map<StreamPartition, Future<GetRecordsResult>> futures;
 
-    private Coordinator coordinator;
+    private final Coordinator coordinator;
 
     private volatile boolean forceWakeup = false;
 
@@ -117,7 +117,11 @@ public class Fetcher {
             if (!StringUtils.isNullOrEmpty(maxRecordsLimit)) {
                 getRecordsParam.setLimit(Integer.parseInt(maxRecordsLimit));
             }
-
+            // 设置app名称
+            if (!StringUtils.isNullOrEmpty(disConfig.getProperty(DisConsumerConfig.GROUP_ID_CONFIG))) {
+                getRecordsParam.setAppName(disConfig.getProperty(DisConsumerConfig.GROUP_ID_CONFIG));
+            }
+            
             // 设置每次获取最大字节数
             String maxBytesLimit = disConfig.getProperty(DisConsumerConfig.GET_RECORDS_MAX_BYTES);
             if (!StringUtils.isNullOrEmpty(maxBytesLimit)) {
@@ -268,8 +272,8 @@ public class Fetcher {
     }
 
     class FetchResult {
-        private Map<StreamPartition, List<Record>> records;
-        private long recordsCount;
+        private final Map<StreamPartition, List<Record>> records;
+        private final long recordsCount;
 
         public FetchResult(Map<StreamPartition, List<Record>> records, long recordsCount) {
             this.records = records;
