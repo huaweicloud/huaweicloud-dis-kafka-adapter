@@ -62,15 +62,15 @@ public class DISConsumer extends AbstractAdapter implements IDISConsumer {
     private static final long NO_CURRENT_THREAD = -1L;
 
     private static final long MAX_POLL_TIMEOUT = 30000L;
-    private final Coordinator coordinator;
-    private final SubscriptionState subscriptions;
+    private Coordinator coordinator;
+    private SubscriptionState subscriptions;
     private boolean closed = false;
     private final AtomicLong currentThread = new AtomicLong(NO_CURRENT_THREAD);
     private final AtomicInteger refcount = new AtomicInteger(0);
 
-    private final String clientId;
-    private final String groupId;
-    private final Fetcher fetcher;
+    private String clientId;
+    private String groupId;
+    private Fetcher fetcher;
     private boolean forceWakeup = false;
     ConcurrentHashMap<StreamPartition, PartitionCursor> nextIterators;
     

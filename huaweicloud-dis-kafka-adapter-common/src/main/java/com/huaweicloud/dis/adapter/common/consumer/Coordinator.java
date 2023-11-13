@@ -64,53 +64,53 @@ public class Coordinator {
 
     private static final long DEFAULT_GENERATION = -1L;
 
-    private final InnerDisClient innerDISClient;
+    private InnerDisClient innerDISClient;
 
-    private final DISAsync disAsync;
+    private DISAsync disAsync;
 
     private ClientState state;
 
-    private final String clintId;
+    private String clintId;
 
-    private final String groupId;
+    private String groupId;
 
-    private final AtomicLong generation;
+    private AtomicLong generation;
 
-    private final boolean autoCommitEnabled;
+    private boolean autoCommitEnabled;
 
-    private final long autoCommitIntervalMs;
+    private long autoCommitIntervalMs;
 
-    private final boolean periodicHeartbeatEnabled;
+    private boolean periodicHeartbeatEnabled;
 
-    private final long heartbeatIntervalMs;
+    private long heartbeatIntervalMs;
 
-    private final long rebalanceTimeoutMs;
+    private long rebalanceTimeoutMs;
 
-    private final boolean accelerateAssignEnabled;
+    private boolean accelerateAssignEnabled;
 
     private Map<String, List<Integer>> assignment;
 
-    private final ConcurrentHashMap<StreamPartition, PartitionCursor> nextIterators;
+    private ConcurrentHashMap<StreamPartition, PartitionCursor> nextIterators;
 
-    private final SubscriptionState subscriptions;
+    private SubscriptionState subscriptions;
 
-    private final DelayQueue<DelayedTask> delayedTasks;
+    private DelayQueue<DelayedTask> delayedTasks;
 
-    private final ArrayBlockingQueue<CommitOffsetThunk> asyncCommitOffsetQueue = new ArrayBlockingQueue<>(1000);
+    private ArrayBlockingQueue<CommitOffsetThunk> asyncCommitOffsetQueue = new ArrayBlockingQueue<>(1000);
 
     public volatile boolean isAsyncCommitting = false;
 
-    private final Map<String, Integer> oldStreamReadablePartitionCountMap = new ConcurrentHashMap<>();
+    private Map<String, Integer> oldStreamReadablePartitionCountMap = new ConcurrentHashMap<>();
 
-    private final Map<String, Integer> curStreamReadablePartitionCountMap = new ConcurrentHashMap<>();
+    private Map<String, Integer> curStreamReadablePartitionCountMap = new ConcurrentHashMap<>();
 
-    private final Map<StreamPartition, Long> lastCommitOffsetMap = new ConcurrentHashMap<>();
+    private Map<StreamPartition, Long> lastCommitOffsetMap = new ConcurrentHashMap<>();
 
     boolean enableSubscribeExpandingAdapter = true;
     /**
      * 异步offset提交线程
      */
-    private final AsyncCommitOffsetThread asyncCommitOffsetThread;
+    private AsyncCommitOffsetThread asyncCommitOffsetThread;
 
     /**
      * 定时心跳线程
@@ -1017,8 +1017,8 @@ public class Coordinator {
     }
 
     private class CommitOffsetThunk {
-        private final Map<StreamPartition, DisOffsetAndMetadata> offsets;
-        private final DisOffsetCommitCallback callback;
+        private Map<StreamPartition, DisOffsetAndMetadata> offsets;
+        private DisOffsetCommitCallback callback;
 
         public CommitOffsetThunk(Map<StreamPartition, DisOffsetAndMetadata> offsets, DisOffsetCommitCallback callback) {
             if (offsets == null) {
@@ -1080,7 +1080,7 @@ public class Coordinator {
     private class PeriodicHeartbeatThread extends DISThread {
 
         private boolean closed = false;
-        private final long heartbeatIntervalMs;
+        private long heartbeatIntervalMs;
 
         public PeriodicHeartbeatThread(long heartbeatIntervalMs) {
             super("dis-coordinator-heartbeat-thread" + (groupId.isEmpty() ? "" : " | " + groupId), true);
