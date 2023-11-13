@@ -64,59 +64,59 @@ public class Coordinator {
 
     private static final long DEFAULT_GENERATION = -1L;
 
-    private InnerDisClient innerDISClient;
+    private final InnerDisClient innerDISClient;
 
-    private DISAsync disAsync;
+    private final DISAsync disAsync;
 
     private ClientState state;
 
-    private String clintId;
+    private final String clintId;
 
-    private String groupId;
+    private final String groupId;
 
-    private AtomicLong generation;
+    private final AtomicLong generation;
 
-    private boolean autoCommitEnabled;
+    private final boolean autoCommitEnabled;
 
-    private long autoCommitIntervalMs;
+    private final long autoCommitIntervalMs;
 
-    private boolean periodicHeartbeatEnabled;
+    private final boolean periodicHeartbeatEnabled;
 
-    private long heartbeatIntervalMs;
+    private final long heartbeatIntervalMs;
 
-    private long rebalanceTimeoutMs;
+    private final long rebalanceTimeoutMs;
 
-    private boolean accelerateAssignEnabled;
+    private final boolean accelerateAssignEnabled;
 
     private Map<String, List<Integer>> assignment;
 
-    private ConcurrentHashMap<StreamPartition, PartitionCursor> nextIterators;
+    private final ConcurrentHashMap<StreamPartition, PartitionCursor> nextIterators;
 
-    private SubscriptionState subscriptions;
+    private final SubscriptionState subscriptions;
 
-    private DelayQueue<DelayedTask> delayedTasks;
+    private final DelayQueue<DelayedTask> delayedTasks;
 
-    private ArrayBlockingQueue<CommitOffsetThunk> asyncCommitOffsetQueue = new ArrayBlockingQueue<>(1000);
+    private final ArrayBlockingQueue<CommitOffsetThunk> asyncCommitOffsetQueue = new ArrayBlockingQueue<>(1000);
 
     public volatile boolean isAsyncCommitting = false;
 
-    private Map<String, Integer> oldStreamReadablePartitionCountMap = new ConcurrentHashMap<>();
+    private final Map<String, Integer> oldStreamReadablePartitionCountMap = new ConcurrentHashMap<>();
 
-    private Map<String, Integer> curStreamReadablePartitionCountMap = new ConcurrentHashMap<>();
+    private final Map<String, Integer> curStreamReadablePartitionCountMap = new ConcurrentHashMap<>();
 
-    private Map<StreamPartition, Long> lastCommitOffsetMap = new ConcurrentHashMap<>();
+    private final Map<StreamPartition, Long> lastCommitOffsetMap = new ConcurrentHashMap<>();
 
     boolean enableSubscribeExpandingAdapter = true;
     /**
      * 异步offset提交线程
      */
-    private AsyncCommitOffsetThread asyncCommitOffsetThread;
+    private final AsyncCommitOffsetThread asyncCommitOffsetThread;
 
     /**
      * 定时心跳线程
      */
     private PeriodicHeartbeatThread heartbeatThread;
-
+    
     public Coordinator(DISAsync disAsync,
                        String clientId,
                        String groupId,
@@ -854,7 +854,7 @@ public class Coordinator {
         }
     }
 
-    public void seek(final Set<StreamPartition> streamPartitions) {
+    public void seek(final Set<StreamPartition> streamPartitions, DISConfig disConfig) {
         final AtomicReference<Exception> exceptionReference = new AtomicReference<>();
         final CountDownLatch countDownLatch = new CountDownLatch(streamPartitions.size());
         for (StreamPartition partition : streamPartitions) {
@@ -869,6 +869,10 @@ public class Coordinator {
             getShardIteratorParam.setPartitionId(Utils.getShardIdStringFromPartitionId(partition.partition()));
             getShardIteratorParam.setStartingSequenceNumber(startingSequenceNumber);
             getShardIteratorParam.setStreamName(partition.stream());
+            String streamId = disConfig.getProperty("streamId");
+            if (streamId != null) {
+                getShardIteratorParam.setStreamId(streamId);
+            }
 
             disAsync.getPartitionCursorAsync(getShardIteratorParam, new AsyncHandler<GetPartitionCursorResult>() {
                 @Override
@@ -1013,8 +1017,8 @@ public class Coordinator {
     }
 
     private class CommitOffsetThunk {
-        private Map<StreamPartition, DisOffsetAndMetadata> offsets;
-        private DisOffsetCommitCallback callback;
+        private final Map<StreamPartition, DisOffsetAndMetadata> offsets;
+        private final DisOffsetCommitCallback callback;
 
         public CommitOffsetThunk(Map<StreamPartition, DisOffsetAndMetadata> offsets, DisOffsetCommitCallback callback) {
             if (offsets == null) {
@@ -1076,7 +1080,7 @@ public class Coordinator {
     private class PeriodicHeartbeatThread extends DISThread {
 
         private boolean closed = false;
-        private long heartbeatIntervalMs;
+        private final long heartbeatIntervalMs;
 
         public PeriodicHeartbeatThread(long heartbeatIntervalMs) {
             super("dis-coordinator-heartbeat-thread" + (groupId.isEmpty() ? "" : " | " + groupId), true);

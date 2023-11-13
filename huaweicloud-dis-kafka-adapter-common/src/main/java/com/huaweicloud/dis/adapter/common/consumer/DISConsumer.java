@@ -58,20 +58,23 @@ import java.util.regex.Pattern;
 
 public class DISConsumer extends AbstractAdapter implements IDISConsumer {
     private static final Logger log = LoggerFactory.getLogger(DISConsumer.class);
+    private static final String STREAM_ID = "streamId";
     private static final long NO_CURRENT_THREAD = -1L;
 
     private static final long MAX_POLL_TIMEOUT = 30000L;
-    private Coordinator coordinator;
-    private SubscriptionState subscriptions;
+    private final Coordinator coordinator;
+    private final SubscriptionState subscriptions;
     private boolean closed = false;
     private final AtomicLong currentThread = new AtomicLong(NO_CURRENT_THREAD);
     private final AtomicInteger refcount = new AtomicInteger(0);
 
-    private String clientId;
-    private String groupId;
-    private Fetcher fetcher;
+    private final String clientId;
+    private final String groupId;
+    private final Fetcher fetcher;
     private boolean forceWakeup = false;
     ConcurrentHashMap<StreamPartition, PartitionCursor> nextIterators;
+    
+    private String streamId;
 
     public DISConsumer(Map configs) {
         this(Utils.newDisConfig(configs));
@@ -91,7 +94,11 @@ public class DISConsumer extends AbstractAdapter implements IDISConsumer {
         boolean periodicHeartbeatEnabled = Boolean.valueOf(disConfig.get(DisConsumerConfig.ENABLE_PERIODIC_HEARTBEAT_CONFIG, "true"));
         long heartbeatIntervalMs = Long.valueOf(disConfig.get(DisConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, "10000"));
         long rebalanceTimeoutMs = Long.valueOf(disConfig.get(DisConsumerConfig.REBALANCE_TIMEOUT_MS_CONFIG, "20000"));
-
+        // 跨账号授权需要streamId
+        if (disConfig.getProperty(STREAM_ID, null) != null) {
+            streamId = disConfig.getProperty(STREAM_ID);
+        }
+        
         this.coordinator = new Coordinator(this.disAsync,
                 this.clientId,
                 this.groupId,
@@ -553,7 +560,9 @@ public class DISConsumer extends AbstractAdapter implements IDISConsumer {
             getPartitionCursorRequest.setStreamName(partition.stream());
             getPartitionCursorRequest.setPartitionId(String.valueOf(partition.partition()));
             getPartitionCursorRequest.setTimestamp(timestamp);
-
+            if (streamId != null) {
+                getPartitionCursorRequest.setStreamId(streamId);
+            }
             disAsync.getPartitionCursorAsync(getPartitionCursorRequest, new AsyncHandler<GetPartitionCursorResult>() {
                 @Override
                 public void onError(Exception e) {
@@ -566,6 +575,9 @@ public class DISConsumer extends AbstractAdapter implements IDISConsumer {
                         reGetPartitionCursorRequest.setStreamName(partition.stream());
                         reGetPartitionCursorRequest.setPartitionId(String.valueOf(partition.partition()));
                         reGetPartitionCursorRequest.setTimestamp(earliestTimestamp);
+                        if (streamId != null) {
+                            reGetPartitionCursorRequest.setStreamId(streamId);
+                        }
                         disAsync.getPartitionCursorAsync(reGetPartitionCursorRequest, new AsyncHandler<GetPartitionCursorResult>() {
                             @Override
                             public void onError(Exception e) {
