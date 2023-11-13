@@ -100,7 +100,7 @@ public class Fetcher {
         }
 
         if(needUpdateOffset.size() > 0) {
-            coordinator.seek(needUpdateOffset);
+            coordinator.seek(needUpdateOffset, disConfig);
         }
 
         for (StreamPartition partition : subscriptions.fetchablePartitions()) {

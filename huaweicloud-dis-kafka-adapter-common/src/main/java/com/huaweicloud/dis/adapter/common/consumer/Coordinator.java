@@ -116,7 +116,7 @@ public class Coordinator {
      * 定时心跳线程
      */
     private PeriodicHeartbeatThread heartbeatThread;
-
+    
     public Coordinator(DISAsync disAsync,
                        String clientId,
                        String groupId,
@@ -854,7 +854,7 @@ public class Coordinator {
         }
     }
 
-    public void seek(final Set<StreamPartition> streamPartitions) {
+    public void seek(final Set<StreamPartition> streamPartitions, DISConfig disConfig) {
         final AtomicReference<Exception> exceptionReference = new AtomicReference<>();
         final CountDownLatch countDownLatch = new CountDownLatch(streamPartitions.size());
         for (StreamPartition partition : streamPartitions) {
@@ -869,6 +869,10 @@ public class Coordinator {
             getShardIteratorParam.setPartitionId(Utils.getShardIdStringFromPartitionId(partition.partition()));
             getShardIteratorParam.setStartingSequenceNumber(startingSequenceNumber);
             getShardIteratorParam.setStreamName(partition.stream());
+            String streamId = disConfig.getProperty("streamId");
+            if (streamId != null) {
+                getShardIteratorParam.setStreamId(streamId);
+            }
 
             disAsync.getPartitionCursorAsync(getShardIteratorParam, new AsyncHandler<GetPartitionCursorResult>() {
                 @Override
