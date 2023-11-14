@@ -25,6 +25,7 @@ import com.huaweicloud.dis.adapter.common.model.PartitionIterator;
 import com.huaweicloud.dis.adapter.common.model.StreamPartition;
 import com.huaweicloud.dis.core.DISCredentials;
 import com.huaweicloud.dis.core.handler.AsyncHandler;
+import com.huaweicloud.dis.core.util.StringUtils;
 import com.huaweicloud.dis.exception.DISClientException;
 import com.huaweicloud.dis.exception.DISTimestampOutOfRangeException;
 import com.huaweicloud.dis.http.exception.RestClientResponseException;
@@ -420,6 +421,9 @@ public class DISConsumer extends AbstractAdapter implements IDISConsumer {
             DescribeStreamRequest describeStreamRequest = new DescribeStreamRequest();
             describeStreamRequest.setStreamName(stream);
             describeStreamRequest.setLimitPartitions(1);
+            if (!StringUtils.isNullOrEmpty(streamId)) {
+                describeStreamRequest.setStreamId(streamId);
+            }
             DescribeStreamResult describeStreamResult = disAsync.describeStream(describeStreamRequest);
             return describeStreamResult;
         } finally {
