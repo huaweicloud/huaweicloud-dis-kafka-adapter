@@ -117,6 +117,8 @@ public class Coordinator {
      */
     private PeriodicHeartbeatThread heartbeatThread;
     
+    private String streamId;
+    
     public Coordinator(DISAsync disAsync,
                        String clientId,
                        String groupId,
@@ -163,6 +165,7 @@ public class Coordinator {
         this.rebalanceTimeoutMs = rebalanceTimeoutMs;
 
         this.accelerateAssignEnabled = Boolean.valueOf(disConfig.get(DisConsumerConfig.ENABLE_ACCELERATE_ASSIGN_CONFIG, "false"));
+        this.streamId = disConfig.getProperty("streamId");
     }
 
     public boolean isStable() {
@@ -652,6 +655,9 @@ public class Coordinator {
                 describeStreamRequest.setStreamName(entry.getKey());
                 describeStreamRequest.setLimitPartitions(100);
                 describeStreamRequest.setStartPartitionId(partitionId);
+                if (StringUtils.isNullOrEmpty(streamId)) {
+                    describeStreamRequest.setStreamId(streamId);
+                }
                 DescribeStreamResult describeStreamResult = disAsync.describeStream(describeStreamRequest);
                 for (PartitionResult partitionResult : describeStreamResult.getPartitions()) {
                     int id = Utils.getKafkaPartitionFromPartitionId(partitionResult.getPartitionId());
@@ -742,6 +748,9 @@ public class Coordinator {
         describeStreamRequest.setStreamName(partition.stream());
         describeStreamRequest.setLimitPartitions(1);
         describeStreamRequest.setStartPartitionId(partitionId);
+        if (!StringUtils.isNullOrEmpty(streamId)) {
+            describeStreamRequest.setStreamId(streamId);
+        }
         DescribeStreamResult describeStreamResult = disAsync.describeStream(describeStreamRequest);
         String offsetRange = describeStreamResult.getPartitions().get(0).getSequenceNumberRange();
         long offset = -1;
