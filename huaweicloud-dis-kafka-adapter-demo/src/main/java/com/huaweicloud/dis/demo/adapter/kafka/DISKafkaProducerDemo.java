@@ -14,23 +14,20 @@ import java.util.concurrent.ThreadLocalRandom;
 public class DISKafkaProducerDemo {
     private static final Logger LOGGER = LoggerFactory.getLogger(DISKafkaProducerDemo.class);
 
+    private static final String path = "dis.properties";
     public static void main(String[] args) {
-        // YOU AK
-        String ak = "YOU_AK";
-        // YOU SK
-        String sk = "YOU_SK";
-        // YOU ProjectId
-        String projectId = "YOU_PROJECT_ID";
-        // YOU DIS Stream
-        String streamName = "YOU_STREAM_NAME";
-        // DIS region
-        String region = "your region";
 
+        //从配置文件中获取基础信息
         Properties props = new Properties();
-        props.setProperty(DISConfig.PROPERTY_AK, ak);
-        props.setProperty(DISConfig.PROPERTY_SK, sk);
-        props.setProperty(DISConfig.PROPERTY_PROJECT_ID, projectId);
-        props.setProperty(DISConfig.PROPERTY_REGION_ID, region);
+        try {
+            FileInputStream fileInputStream = new FileInputStream(path);
+            props.load(fileInputStream);
+        } catch (FileNotFoundException e) {
+            e.printStackTrace();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
         props.setProperty(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
         props.setProperty(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
 
