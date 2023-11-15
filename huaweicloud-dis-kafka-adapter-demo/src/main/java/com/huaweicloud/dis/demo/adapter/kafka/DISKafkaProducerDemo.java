@@ -13,21 +13,23 @@ import java.util.concurrent.ThreadLocalRandom;
 
 public class DISKafkaProducerDemo {
     private static final Logger LOGGER = LoggerFactory.getLogger(DISKafkaProducerDemo.class);
-
-    private static final String path = "dis.properties";
     public static void main(String[] args) {
+        // 认证用的ak和sk直接写到代码中有很大的安全风险，建议在配置文件或者环境变量中密文存放，使用时解密，确保安全；
+        // 本示例以ak和sk保存在环境变量中来实现身份验证为例，运行本示例前请先在本地环境中设置环境变量HUAWEICLOUD_SDK_AK和HUAWEICLOUD_SDK_SK。
+        String ak = System.getenv("HUAWEICLOUD_SDK_AK");
+        String sk = System.getenv("HUAWEICLOUD_SDK_SK");
+        // YOU ProjectId
+        String projectId = "YOU_PROJECT_ID";
+        // YOU DIS Stream
+        String streamName = "YOU_STREAM_NAME";
+        // DIS region
+        String region = "your region";
 
-        //从配置文件中获取基础信息
         Properties props = new Properties();
-        try {
-            FileInputStream fileInputStream = new FileInputStream(path);
-            props.load(fileInputStream);
-        } catch (FileNotFoundException e) {
-            e.printStackTrace();
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-
+        props.setProperty(DISConfig.PROPERTY_AK, ak);
+        props.setProperty(DISConfig.PROPERTY_SK, sk);
+        props.setProperty(DISConfig.PROPERTY_PROJECT_ID, projectId);
+        props.setProperty(DISConfig.PROPERTY_REGION_ID, region);
         props.setProperty(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
         props.setProperty(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
 
