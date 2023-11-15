@@ -655,7 +655,7 @@ public class Coordinator {
                 describeStreamRequest.setStreamName(entry.getKey());
                 describeStreamRequest.setLimitPartitions(100);
                 describeStreamRequest.setStartPartitionId(partitionId);
-                if (StringUtils.isNullOrEmpty(streamId)) {
+                if (!StringUtils.isNullOrEmpty(streamId)) {
                     describeStreamRequest.setStreamId(streamId);
                 }
                 DescribeStreamResult describeStreamResult = disAsync.describeStream(describeStreamRequest);
@@ -879,7 +879,7 @@ public class Coordinator {
             getShardIteratorParam.setStartingSequenceNumber(startingSequenceNumber);
             getShardIteratorParam.setStreamName(partition.stream());
             String streamId = disConfig.getProperty("streamId");
-            if (streamId != null) {
+            if (!StringUtils.isNullOrEmpty(streamId)) {
                 getShardIteratorParam.setStreamId(streamId);
             }
 
