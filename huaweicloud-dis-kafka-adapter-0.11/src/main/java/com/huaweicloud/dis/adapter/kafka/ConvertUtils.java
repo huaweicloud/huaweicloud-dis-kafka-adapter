@@ -31,7 +31,7 @@ public class ConvertUtils {
     public static StreamPartition convert2StreamPartition(final TopicPartition topicPartition) {
         StreamPartition streamPartition = null;
         if (topicPartition != null) {
-            streamPartition = new StreamPartition(topicPartition.topic(), topicPartition.partition());
+            streamPartition = new StreamPartition(topicPartition.topic(), topicPartition.partition(), null);
         }
         return streamPartition;
     }

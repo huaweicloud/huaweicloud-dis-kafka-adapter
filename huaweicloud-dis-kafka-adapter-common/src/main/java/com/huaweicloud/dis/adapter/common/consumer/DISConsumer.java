@@ -39,6 +39,10 @@ import com.huaweicloud.dis.iface.stream.response.ListStreamsResult;
 import com.huaweicloud.dis.iface.stream.response.PartitionResult;
 import com.huaweicloud.dis.util.JsonUtils;
 import com.huaweicloud.dis.util.PartitionCursorTypeEnum;
+import com.sun.javafx.binding.StringFormatter;
+
+import javafx.beans.binding.StringExpression;
+
 import org.apache.http.NoHttpResponseException;
 import org.apache.http.conn.ConnectTimeoutException;
 import org.apache.http.conn.HttpHostConnectException;
@@ -55,11 +59,11 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Pattern;
+import java.util.stream.Stream;
 
 
 public class DISConsumer extends AbstractAdapter implements IDISConsumer {
     private static final Logger log = LoggerFactory.getLogger(DISConsumer.class);
-    private static final String STREAM_ID = "streamId";
     private static final long NO_CURRENT_THREAD = -1L;
 
     private static final long MAX_POLL_TIMEOUT = 30000L;
@@ -75,8 +79,6 @@ public class DISConsumer extends AbstractAdapter implements IDISConsumer {
     private boolean forceWakeup = false;
     ConcurrentHashMap<StreamPartition, PartitionCursor> nextIterators;
     
-    private String streamId;
-
     public DISConsumer(Map configs) {
         this(Utils.newDisConfig(configs));
     }
@@ -95,11 +97,6 @@ public class DISConsumer extends AbstractAdapter implements IDISConsumer {
         boolean periodicHeartbeatEnabled = Boolean.valueOf(disConfig.get(DisConsumerConfig.ENABLE_PERIODIC_HEARTBEAT_CONFIG, "true"));
         long heartbeatIntervalMs = Long.valueOf(disConfig.get(DisConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, "10000"));
         long rebalanceTimeoutMs = Long.valueOf(disConfig.get(DisConsumerConfig.REBALANCE_TIMEOUT_MS_CONFIG, "20000"));
-        // 跨账号授权需要streamId
-        if (disConfig.getProperty(STREAM_ID, null) != null) {
-            streamId = disConfig.getProperty(STREAM_ID);
-        }
-        
         this.coordinator = new Coordinator(this.disAsync,
                 this.clientId,
                 this.groupId,
@@ -151,6 +148,59 @@ public class DISConsumer extends AbstractAdapter implements IDISConsumer {
             }
         } finally {
             release();
+        }
+    }
+
+    @Override
+    public void subscribe(Collection<String> streamNames, Collection<String> streamIds, DisConsumerRebalanceListener listener) {
+        validateSubscribeStream(streamNames, streamIds);
+        acquire();
+        try {
+            if ((streamNames == null || streamNames.isEmpty()) && (streamIds == null || streamIds.isEmpty())) {
+                this.unsubscribe();
+            } else {
+                log.debug("Subscribed to stream(s): {}", Utils.join(streamNames, Utils.join(streamIds, ", ")));
+                this.subscriptions.subscribe(streamNames, streamIds, listener);
+            }
+        } finally {
+            release();
+        }
+    }
+
+    public void validateSubscribeStream(Collection<String> streamNames, Collection<String> streamIds) {
+        if (streamNames != null && !streamNames.isEmpty()) {
+            int allSize = streamNames.size();
+            int distinctSize = streamNames.stream().distinct().toArray().length;
+            if (allSize != distinctSize) {
+                throw new IllegalArgumentException("Duplicate elements are not allowed in topicNames, please correct it.");
+            }
+        }
+        if (streamIds != null && !streamIds.isEmpty()) {
+            int allSize = streamIds.size();
+            int distinctSize = streamIds.stream().distinct().toArray().length;
+            if (allSize != distinctSize) {
+                throw new IllegalArgumentException("Duplicate elements are not allowed in topicIds, please correct it.");
+            }
+        }
+        Map<String, String> allStreamIds = new HashMap<>();
+        if (streamNames != null && !streamNames.isEmpty()) {
+            for (String streamName : streamNames) {
+                DescribeStreamRequest describeStreamRequest = new DescribeStreamRequest();
+                describeStreamRequest.setStreamName(streamName);
+                describeStreamRequest.setLimitPartitions(1);
+                String partitionId = Utils.getShardIdStringFromPartitionId(1);
+                describeStreamRequest.setStartPartitionId(partitionId);
+                DescribeStreamResult describeStreamResult = disAsync.describeStream(describeStreamRequest);
+                allStreamIds.put(describeStreamResult.getStreamId(), describeStreamResult.getStreamName());
+            }
+        }
+        if (streamIds != null && !streamIds.isEmpty()) {
+            for (String streamId : streamIds) {
+                if (allStreamIds.containsKey(streamId)) {
+                    String errorMsg = String.format("{} of topicIds and {} of topicNames point to the same topic , which is not allowed, please correct it.", streamId, allStreamIds.get(streamId));
+                    throw new IllegalArgumentException(errorMsg);
+                }
+            }
         }
     }
 
@@ -421,9 +471,6 @@ public class DISConsumer extends AbstractAdapter implements IDISConsumer {
             DescribeStreamRequest describeStreamRequest = new DescribeStreamRequest();
             describeStreamRequest.setStreamName(stream);
             describeStreamRequest.setLimitPartitions(1);
-            if (!StringUtils.isNullOrEmpty(streamId)) {
-                describeStreamRequest.setStreamId(streamId);
-            }
             DescribeStreamResult describeStreamResult = disAsync.describeStream(describeStreamRequest);
             return describeStreamResult;
         } finally {
@@ -564,9 +611,6 @@ public class DISConsumer extends AbstractAdapter implements IDISConsumer {
             getPartitionCursorRequest.setStreamName(partition.stream());
             getPartitionCursorRequest.setPartitionId(String.valueOf(partition.partition()));
             getPartitionCursorRequest.setTimestamp(timestamp);
-            if (streamId != null) {
-                getPartitionCursorRequest.setStreamId(streamId);
-            }
             disAsync.getPartitionCursorAsync(getPartitionCursorRequest, new AsyncHandler<GetPartitionCursorResult>() {
                 @Override
                 public void onError(Exception e) {
@@ -579,9 +623,6 @@ public class DISConsumer extends AbstractAdapter implements IDISConsumer {
                         reGetPartitionCursorRequest.setStreamName(partition.stream());
                         reGetPartitionCursorRequest.setPartitionId(String.valueOf(partition.partition()));
                         reGetPartitionCursorRequest.setTimestamp(earliestTimestamp);
-                        if (streamId != null) {
-                            reGetPartitionCursorRequest.setStreamId(streamId);
-                        }
                         disAsync.getPartitionCursorAsync(reGetPartitionCursorRequest, new AsyncHandler<GetPartitionCursorResult>() {
                             @Override
                             public void onError(Exception e) {
@@ -648,15 +689,15 @@ public class DISConsumer extends AbstractAdapter implements IDISConsumer {
     }
 
     private Map<StreamPartition, Long> offsets(Collection<StreamPartition> collection, boolean beginningOrEnd) {
-        Map<String, List<Integer>> describeTopic = new HashMap<>();
+        Map<StreamPartition, List<Integer>> describeTopic = new HashMap<>();
         Map<StreamPartition, Long> results = new HashMap<>();
         for (StreamPartition streamPartition : collection) {
             if (describeTopic.get(streamPartition.stream()) == null) {
-                describeTopic.putIfAbsent(streamPartition.stream(), new ArrayList<>());
+                describeTopic.putIfAbsent(streamPartition, new ArrayList<>());
             }
-            describeTopic.get(streamPartition.stream()).add(streamPartition.partition());
+            describeTopic.get(streamPartition).add(streamPartition.partition());
         }
-        for (Map.Entry<String, List<Integer>> entry : describeTopic.entrySet()) {
+        for (Map.Entry<StreamPartition, List<Integer>> entry : describeTopic.entrySet()) {
             List<Integer> parts = entry.getValue();
             parts.sort(new Comparator<Integer>() {
                 @Override
@@ -669,14 +710,22 @@ public class DISConsumer extends AbstractAdapter implements IDISConsumer {
                 final int LIMIT = 100;
                 String partitionId = parts.get(index) == 0 ? "" : Utils.getShardIdStringFromPartitionId(parts.get(index) - 1);
                 DescribeStreamRequest describeStreamRequest = new DescribeStreamRequest();
-                describeStreamRequest.setStreamName(entry.getKey());
+                StreamPartition stream = entry.getKey();
+                if (!StringUtils.isNullOrEmpty(stream.stream())) {
+                    describeStreamRequest.setStreamName(stream.stream());
+                } else {
+                    describeStreamRequest.setStreamName(stream.getStreamId());
+                }
+                if (!StringUtils.isNullOrEmpty(stream.getStreamId())) {
+                    describeStreamRequest.setStreamId(stream.getStreamId());
+                }
+
                 describeStreamRequest.setLimitPartitions(LIMIT);
                 describeStreamRequest.setStartPartitionId(partitionId);
                 DescribeStreamResult describeStreamResult = disAsync.describeStream(describeStreamRequest);
                 for (PartitionResult partitionResult : describeStreamResult.getPartitions()) {
                     if (Utils.getKafkaPartitionFromPartitionId(partitionResult.getPartitionId()) == parts.get(index)) {
-                        StreamPartition partition = new StreamPartition(entry.getKey(), parts.get(index));
-
+                        StreamPartition partition = new StreamPartition(stream.stream(), parts.get(index), stream.getStreamId());
                         String offsetRange = partitionResult.getSequenceNumberRange();
                         if (offsetRange == null) {
                             log.error("partition " + partition + " has been expired and is not readable");

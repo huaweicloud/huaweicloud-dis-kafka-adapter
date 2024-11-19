@@ -37,6 +37,7 @@ public interface IDISConsumer extends Cloneable {
 
     public void subscribe(Collection<String> topics);
 
+    public void subscribe(Collection<String> topicNames, Collection<String> topicIds, DisConsumerRebalanceListener callback);
 
     public void subscribe(Collection<String> topics, DisConsumerRebalanceListener callback);
 
