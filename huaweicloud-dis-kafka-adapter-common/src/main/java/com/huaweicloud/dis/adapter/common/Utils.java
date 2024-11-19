@@ -47,11 +47,13 @@ public class Utils {
 
     public static <T> String join(Collection<T> list, String seperator) {
         StringBuilder sb = new StringBuilder();
-        Iterator<T> iter = list.iterator();
-        while (iter.hasNext()) {
-            sb.append(iter.next());
-            if (iter.hasNext())
-                sb.append(seperator);
+        if (list != null) {
+            Iterator<T> iter = list.iterator();
+            while (iter.hasNext()) {
+                sb.append(iter.next());
+                if (iter.hasNext())
+                    sb.append(seperator);
+            }
         }
         return sb.toString();
     }

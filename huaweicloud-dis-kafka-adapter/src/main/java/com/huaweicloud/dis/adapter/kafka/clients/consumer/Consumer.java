@@ -50,6 +50,11 @@ public interface Consumer<K, V> extends Closeable {
     public void subscribe(Collection<String> topics);
 
     /**
+     * @see DISKafkaConsumer#subscribe(Collection)
+     */
+    public void subscribe(Collection<String> topicNames, Collection<String> topicIds);
+
+    /**
      * @see DISKafkaConsumer#subscribe(Collection, ConsumerRebalanceListener)
      */
     public void subscribe(Collection<String> topics, ConsumerRebalanceListener callback);

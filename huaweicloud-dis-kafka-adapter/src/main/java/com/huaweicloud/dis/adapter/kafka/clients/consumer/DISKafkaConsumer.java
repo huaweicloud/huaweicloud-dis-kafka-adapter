@@ -455,6 +455,16 @@ public class DISKafkaConsumer<K, V> implements Consumer<K, V> {
         disConsumer.subscribe(topics, new DisNoOpDisConsumerRebalanceListener());
     }
 
+    /**
+     *
+     *  @param topicNames 通道名称（租户自己创建自己消费场景）
+     * @param topicIds 通道ID列表（跨账号进行消费场景）
+     */
+    @Override
+    public void subscribe(Collection<String> topicNames, Collection<String> topicIds) {
+        disConsumer.subscribe(topicNames, topicIds, new DisNoOpDisConsumerRebalanceListener());
+    }
+
     @Override
     public void assign(Collection<TopicPartition> partitions) {
         disConsumer.assign(ConvertUtils.convert2StreamPartitionCollection(partitions));

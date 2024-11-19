@@ -39,8 +39,8 @@ public class SubscriptionStateTest {
     private final SubscriptionState state = new SubscriptionState(DisOffsetResetStrategy.EARLIEST);
     private final String topic = "test";
     private final String topic1 = "test1";
-    private final StreamPartition tp0 = new StreamPartition("test", 0);
-    private final StreamPartition tp1 = new StreamPartition("test", 1);
+    private final StreamPartition tp0 = new StreamPartition("test", 0, null);
+    private final StreamPartition tp1 = new StreamPartition("test", 1, null);
     private final MockRebalanceListenerDis rebalanceListener = new MockRebalanceListenerDis();
 
     @Test

@@ -112,12 +112,12 @@ public class Coordinator {
      */
     private AsyncCommitOffsetThread asyncCommitOffsetThread;
 
+    private DISConfig disConfig;
+
     /**
      * 定时心跳线程
      */
     private PeriodicHeartbeatThread heartbeatThread;
-    
-    private String streamId;
     
     public Coordinator(DISAsync disAsync,
                        String clientId,
@@ -132,6 +132,7 @@ public class Coordinator {
                        DISConfig disConfig) {
         this.disAsync = disAsync;
         this.innerDISClient = new InnerDisClient(disConfig);
+        this.disConfig = disConfig;
         this.state = ClientState.INIT;
         this.clintId = clientId;
         this.groupId = groupId;
@@ -165,7 +166,6 @@ public class Coordinator {
         this.rebalanceTimeoutMs = rebalanceTimeoutMs;
 
         this.accelerateAssignEnabled = Boolean.valueOf(disConfig.get(DisConsumerConfig.ENABLE_ACCELERATE_ASSIGN_CONFIG, "false"));
-        this.streamId = disConfig.getProperty("streamId");
     }
 
     public boolean isStable() {
@@ -349,14 +349,17 @@ public class Coordinator {
         joinGroupRequest.setGroupId(groupId);
         joinGroupRequest.setAccelerateAssignEnabled(this.accelerateAssignEnabled);
         joinGroupRequest.setRebalanceTimeoutMs(this.rebalanceTimeoutMs);
+        if (subscriptions.getSubscriptionIds() != null) {
+            List<String> interestedStreamIdList = new ArrayList<>(subscriptions.getSubscriptionIds());
+            joinGroupRequest.setInterestedStreamIdList(interestedStreamIdList);
+        }
         if (subscriptions.hasPatternSubscription()) {
             joinGroupRequest.setStreamPattern(subscriptions.getSubscribedPattern().pattern());
         } else {
-            List<String> interestedStreams = new ArrayList<>();
-            for (String item : subscriptions.subscription()) {
-                interestedStreams.add(item);
+            if (subscriptions.getSubscriptionStreams() != null) {
+                List<String> interestedStreamNameList = new ArrayList<>(subscriptions.getSubscriptionStreams());
+                joinGroupRequest.setInterestedStream(interestedStreamNameList);
             }
-            joinGroupRequest.setInterestedStream(interestedStreams);
         }
         log.info("[JOIN] Request to join group [{}]", JsonUtils.objToJson(joinGroupRequest));
         JoinGroupResponse joinGroupResponse = innerDISClient.handleJoinGroupRequest(joinGroupRequest);
@@ -381,7 +384,14 @@ public class Coordinator {
                 doJoinGroup();
                 break;
             case ERR_SUBSCRIPTION:
-                log.error("[JOIN] Failed to join group, stream {} may be not exist", joinGroupRequest.getInterestedStream());
+                if (joinGroupRequest.getInterestedStream() != null && joinGroupRequest.getInterestedStreamIdList() != null) {
+                    log.error("[JOIN] Failed to join group, may be exist the same name stream in param interestedStream and interestedStreamIdList, " +
+                        "this is not allowed, please check, stream:{}, streamIdList: {}",
+                        joinGroupRequest.getInterestedStream(), joinGroupRequest.getInterestedStreamIdList());
+                } else {
+                    log.error("[JOIN] Failed to join group, stream {} and streamId:{}, may be not exist",
+                        joinGroupRequest.getInterestedStream(), joinGroupRequest.getInterestedStreamIdList());
+                }
                 throw new IllegalArgumentException("Failed to join group, stream "
                         + joinGroupRequest.getInterestedStream() + " may be not exist");
             case GROUP_NOT_EXIST:
@@ -448,7 +458,11 @@ public class Coordinator {
         List<StreamPartition> partitionsAssignment = new ArrayList<>();
         for (Map.Entry<String, List<Integer>> entry : assignment.entrySet()) {
             for (Integer partition : entry.getValue()) {
-                partitionsAssignment.add(new StreamPartition(entry.getKey(), partition));
+                if (subscriptions.getSubscriptionIds().contains(entry.getKey())) {
+                    partitionsAssignment.add(new StreamPartition("", partition, entry.getKey()));
+                } else {
+                    partitionsAssignment.add(new StreamPartition(entry.getKey(), partition, ""));
+                }
             }
         }
         Iterator<Map.Entry<StreamPartition, PartitionCursor>> iter = nextIterators.entrySet().iterator();
@@ -514,7 +528,12 @@ public class Coordinator {
                 commitCheckpointRequest.setGenerationId(generation.get());
             }
             commitCheckpointRequest.setMetadata(offset.getValue().metadata());
-            commitCheckpointRequest.setStreamName(streamPartition.stream());
+            if (!StringUtils.isNullOrEmpty(streamPartition.stream())) {
+                commitCheckpointRequest.setStreamName(streamPartition.stream());
+            }
+            if (!StringUtils.isNullOrEmpty(streamPartition.getStreamId())) {
+                commitCheckpointRequest.setStreamId(streamPartition.getStreamId());
+            }
             commitCheckpointRequest.setPartitionId(Utils.getShardIdStringFromPartitionId(streamPartition.partition()));
             disAsync.commitCheckpointAsync(commitCheckpointRequest, new AsyncHandler<CommitCheckpointResult>() {
                 @Override
@@ -597,18 +616,18 @@ public class Coordinator {
         }
     }
 
-    private void addPartition(Map<String, List<Integer>> describeTopic, StreamPartition part) {
-        if (describeTopic.get(part.stream()) == null) {
-            describeTopic.putIfAbsent(part.stream(), new ArrayList<>());
+    private void addPartition(Map<StreamPartition, List<Integer>> describeTopic, StreamPartition part) {
+        if (describeTopic.get(part) == null) {
+            describeTopic.putIfAbsent(part, new ArrayList<>());
         }
-        describeTopic.get(part.stream()).add(part.partition());
+        describeTopic.get(part).add(part.partition());
     }
 
     public void updateFetchPositions(Set<StreamPartition> partitions) {
         // refresh commits for all assigned partitions
         refreshCommittedOffsetsIfNeeded();
 
-        Map<String, List<Integer>> describeTopic = new HashMap<>();
+        Map<StreamPartition, List<Integer>> describeTopic = new HashMap<>();
         // then do any offset lookups in case some positions are not known
         // reset the fetch position to the committed position
         for (StreamPartition tp : partitions) {
@@ -628,7 +647,6 @@ public class Coordinator {
                 } else {
                     subscriptions.needOffsetReset(tp);
                 }
-                //            resetOffset(tp);
                 addPartition(describeTopic, tp);
             } else {
                 long committed = subscriptions.committed(tp).offset();
@@ -639,8 +657,8 @@ public class Coordinator {
         resetOffsetByTopic(describeTopic);
     }
 
-    private void resetOffsetByTopic(Map<String, List<Integer>> describeTopic) {
-        for (Map.Entry<String, List<Integer>> entry : describeTopic.entrySet()) {
+    private void resetOffsetByTopic(Map<StreamPartition, List<Integer>> describeTopic) {
+        for (Map.Entry<StreamPartition, List<Integer>> entry : describeTopic.entrySet()) {
             List<Integer> parts = entry.getValue();
             parts.sort(new Comparator<Integer>() {
                 @Override
@@ -652,17 +670,22 @@ public class Coordinator {
             while (index < parts.size()) {
                 String partitionId = parts.get(index) == 0 ? "" : Utils.getShardIdStringFromPartitionId(parts.get(index) - 1);
                 DescribeStreamRequest describeStreamRequest = new DescribeStreamRequest();
-                describeStreamRequest.setStreamName(entry.getKey());
+                StreamPartition streamPartition = entry.getKey();
+                if (!StringUtils.isNullOrEmpty(streamPartition.stream())) {
+                    describeStreamRequest.setStreamName(streamPartition.stream());
+                } else {
+                    describeStreamRequest.setStreamName(streamPartition.getStreamId());
+                }
+                if (!StringUtils.isNullOrEmpty(streamPartition.getStreamId())) {
+                    describeStreamRequest.setStreamId(streamPartition.getStreamId());
+                }
                 describeStreamRequest.setLimitPartitions(100);
                 describeStreamRequest.setStartPartitionId(partitionId);
-                if (!StringUtils.isNullOrEmpty(streamId)) {
-                    describeStreamRequest.setStreamId(streamId);
-                }
                 DescribeStreamResult describeStreamResult = disAsync.describeStream(describeStreamRequest);
                 for (PartitionResult partitionResult : describeStreamResult.getPartitions()) {
                     int id = Utils.getKafkaPartitionFromPartitionId(partitionResult.getPartitionId());
                     if (id == parts.get(index)) {
-                        StreamPartition partition = new StreamPartition(entry.getKey(), parts.get(index));
+                        StreamPartition partition = new StreamPartition(streamPartition.stream(), parts.get(index), streamPartition.getStreamId());
                         DisOffsetResetStrategy strategy = subscriptions.resetStrategy(partition);
                         if (strategy != DisOffsetResetStrategy.EARLIEST && strategy != DisOffsetResetStrategy.LATEST) {
                             throw new NoOffsetForPartitionException(partition);
@@ -745,11 +768,15 @@ public class Coordinator {
         }
         String partitionId = partition.partition() == 0 ? "" : Utils.getShardIdStringFromPartitionId(partition.partition() - 1);
         DescribeStreamRequest describeStreamRequest = new DescribeStreamRequest();
-        describeStreamRequest.setStreamName(partition.stream());
         describeStreamRequest.setLimitPartitions(1);
         describeStreamRequest.setStartPartitionId(partitionId);
-        if (!StringUtils.isNullOrEmpty(streamId)) {
-            describeStreamRequest.setStreamId(streamId);
+        if (!StringUtils.isNullOrEmpty(partition.stream())) {
+            describeStreamRequest.setStreamName(partition.stream());
+        } else {
+            describeStreamRequest.setStreamName(partition.getStreamId());
+        }
+        if (!StringUtils.isNullOrEmpty(partition.getStreamId())) {
+            describeStreamRequest.setStreamId(partition.getStreamId());
         }
         DescribeStreamResult describeStreamResult = disAsync.describeStream(describeStreamRequest);
         String offsetRange = describeStreamResult.getPartitions().get(0).getSequenceNumberRange();
@@ -808,7 +835,12 @@ public class Coordinator {
         final Map<StreamPartition, DisOffsetAndMetadata> offsets = new ConcurrentHashMap<>();
         for (StreamPartition partition : partitions) {
             GetCheckpointRequest getCheckpointRequest = new GetCheckpointRequest();
-            getCheckpointRequest.setStreamName(partition.stream());
+            if (!StringUtils.isNullOrEmpty(partition.stream())) {
+                getCheckpointRequest.setStreamName(partition.stream());
+            }
+            if (!StringUtils.isNullOrEmpty(partition.getStreamId())) {
+                getCheckpointRequest.setStreamId(partition.getStreamId());
+            }
             getCheckpointRequest.setAppName(groupId);
             getCheckpointRequest.setCheckpointType(CheckpointTypeEnum.LAST_READ.name());
             getCheckpointRequest.setPartitionId(Utils.getShardIdStringFromPartitionId(partition.partition()));
@@ -878,9 +910,8 @@ public class Coordinator {
             getShardIteratorParam.setPartitionId(Utils.getShardIdStringFromPartitionId(partition.partition()));
             getShardIteratorParam.setStartingSequenceNumber(startingSequenceNumber);
             getShardIteratorParam.setStreamName(partition.stream());
-            String streamId = disConfig.getProperty("streamId");
-            if (!StringUtils.isNullOrEmpty(streamId)) {
-                getShardIteratorParam.setStreamId(streamId);
+            if (!StringUtils.isNullOrEmpty(partition.getStreamId())) {
+                getShardIteratorParam.setStreamId(partition.getStreamId());
             }
 
             disAsync.getPartitionCursorAsync(getShardIteratorParam, new AsyncHandler<GetPartitionCursorResult>() {
@@ -1196,9 +1227,13 @@ public class Coordinator {
             oldStreamReadablePartitionCountMap.putAll(curStreamReadablePartitionCountMap);
             curStreamReadablePartitionCountMap.clear();
             CountDownLatch countDownLatch = new CountDownLatch(subscriptions.subscription().size());
-            for (String streamName : subscriptions.subscription()) {
+            for (String stream : subscriptions.subscription()) {
                 DescribeStreamRequest describeStreamRequest = new DescribeStreamRequest();
-                describeStreamRequest.setStreamName(streamName);
+                if (subscriptions.getSubscriptionIds().contains(stream)) {
+                    describeStreamRequest.setStreamId(stream);
+                } else {
+                    describeStreamRequest.setStreamName(stream);
+                }
                 describeStreamRequest.setLimitPartitions(1);
                 disAsync.describeStreamAsync(describeStreamRequest, new AsyncHandler<DescribeStreamResult>() {
                     @Override
@@ -1210,7 +1245,7 @@ public class Coordinator {
                     @Override
                     public void onSuccess(DescribeStreamResult describeStreamResult) {
                         countDownLatch.countDown();
-                        curStreamReadablePartitionCountMap.put(streamName, describeStreamResult.getReadablePartitionCount());
+                        curStreamReadablePartitionCountMap.put(stream, describeStreamResult.getReadablePartitionCount());
                     }
                 });
             }

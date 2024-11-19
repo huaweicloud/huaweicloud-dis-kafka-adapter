@@ -27,9 +27,12 @@ public final class StreamPartition implements Serializable {
     private final int partition;
     private final String stream;
 
-    public StreamPartition(String stream, int partition) {
+    private final String streamId;
+
+    public StreamPartition(String stream, int partition, String streamId) {
         this.partition = partition;
         this.stream = stream;
+        this.streamId = streamId;
     }
 
     public int partition() {
@@ -38,6 +41,10 @@ public final class StreamPartition implements Serializable {
 
     public String stream() {
         return stream;
+    }
+
+    public String getStreamId() {
+        return streamId;
     }
 
     @Override
@@ -66,7 +73,7 @@ public final class StreamPartition implements Serializable {
         if (stream == null) {
             if (other.stream != null)
                 return false;
-        } else if (!stream.equals(other.stream))
+        } else if (!stream.equals(other.stream) || !streamId.equals(other.streamId))
             return false;
         return true;
     }

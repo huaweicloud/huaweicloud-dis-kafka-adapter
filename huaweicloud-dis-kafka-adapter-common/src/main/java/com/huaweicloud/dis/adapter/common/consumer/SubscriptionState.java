@@ -49,6 +49,8 @@ public class SubscriptionState {
     /* the list of topics the user has requested */
     private final Set<String> subscription;
 
+    private final Set<String> subscriptionIds;
+
     /* the list of topics the group has subscribed to (set only for the leader on join group completion) */
     private final Set<String> groupSubscription;
 
@@ -90,6 +92,7 @@ public class SubscriptionState {
     public SubscriptionState(DisOffsetResetStrategy defaultResetStrategy) {
         this.defaultResetStrategy = defaultResetStrategy;
         this.subscription = new HashSet<>();
+        this.subscriptionIds = new HashSet<>();
         this.userAssignment = new HashSet<>();
         this.assignment = new HashMap<>();
         this.groupSubscription = new HashSet<>();
@@ -107,6 +110,24 @@ public class SubscriptionState {
 
         this.listener = listener;
 
+        changeSubscription(topics);
+    }
+
+    public void subscribe(Collection<String> topicNames, Collection<String> topicIds, DisConsumerRebalanceListener listener) {
+        if (listener == null)
+            throw new IllegalArgumentException("RebalanceListener cannot be null");
+
+        setSubscriptionType(SubscriptionType.AUTO_TOPICS);
+        this.listener = listener;
+        Collection<String> topics = new HashSet<>();
+        if (topicIds != null) {
+            subscriptionIds.addAll(topicIds);
+            topics.addAll(topicIds);
+        }
+        if (topicNames != null) {
+            topics.addAll(topicNames);
+            subscription.addAll(topicNames);
+        }
         changeSubscription(topics);
     }
 
@@ -170,7 +191,7 @@ public class SubscriptionState {
      */
     public void assignFromSubscribed(Collection<StreamPartition> assignments) {
         for (StreamPartition tp : assignments)
-            if (!this.subscription.contains(tp.stream()))
+            if (!this.subscription.contains(tp.stream()) && !this.subscription.contains(tp.getStreamId()))
                 throw new IllegalArgumentException("Assigned partition " + tp + " for non-subscribed topic.");
         this.assignment.clear();
         for (StreamPartition tp : assignments)
@@ -336,6 +357,14 @@ public class SubscriptionState {
             if (!entry.getValue().hasValidPosition())
                 missing.add(entry.getKey());
         return missing;
+    }
+
+    public Set<String> getSubscriptionIds() {
+        return subscriptionIds;
+    }
+
+    public Set<String> getSubscriptionStreams() {
+        return subscription;
     }
 
     public boolean partitionAssignmentNeeded() {
