@@ -356,8 +356,17 @@ public class Coordinator {
         if (subscriptions.hasPatternSubscription()) {
             joinGroupRequest.setStreamPattern(subscriptions.getSubscribedPattern().pattern());
         } else {
-            if (subscriptions.getSubscriptionStreams() != null) {
-                List<String> interestedStreamNameList = new ArrayList<>(subscriptions.getSubscriptionStreams());
+            if (subscriptions.getSubscriptionStreams() != null && !subscriptions.getSubscriptionStreams().isEmpty()) {
+                List<String> interestedStreamNameList = new ArrayList<>();
+                for (String stream : subscriptions.getSubscriptionStreams()) {
+                    if (subscriptions.getSubscriptionIds() == null) {
+                        interestedStreamNameList.add(stream);
+                    }
+                    if (subscriptions.getSubscriptionIds() != null
+                            && !subscriptions.getSubscriptionIds().contains(stream)) {
+                        interestedStreamNameList.add(stream);
+                    }
+                }
                 joinGroupRequest.setInterestedStream(interestedStreamNameList);
             }
         }
