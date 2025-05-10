@@ -47,3 +47,7 @@
 # 1.2.19
 - Bugfixs
   * 支持跨账号授权
+
+# 1.2.20
+- Bugfixs
+  * jackson-databind 类加载死锁问题处理：https://github.com/FasterXML/jackson-databind/issues/2715
