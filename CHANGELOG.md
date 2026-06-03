@@ -51,3 +51,7 @@
 # 1.2.20
 - Bugfixs
   * jackson-databind 类加载死锁问题处理：https://github.com/FasterXML/jackson-databind/issues/2715
+
+# 1.2.21
+- Bugfixs
+  * 处理客户端状态异常转换，导致没有获取checkpoint，从而最终导致重复消费或者丢数据场景
