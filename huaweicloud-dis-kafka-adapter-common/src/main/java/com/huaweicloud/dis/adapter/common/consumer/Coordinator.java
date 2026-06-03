@@ -231,6 +231,7 @@ public class Coordinator {
                 getSubscribeStreamPartitionCount();
                 updateSubscriptions(assignment);
                 subscriptions.listener().onPartitionsAssigned(subscriptions.assignedPartitions());
+                subscriptions.needRefreshCommits();
                 log.info("Client [{}] success to join group [{}], subscription {}", clintId, groupId, assignment);
             }
             switch (heartbeatResponse.getState()) {
@@ -419,7 +420,7 @@ public class Coordinator {
         if (StringUtils.isNullOrEmpty(groupId)) {
             throw new IllegalStateException("groupId not defined, can not send syncGroup request");
         }
-        state = ClientState.SYNCING;
+        
         SyncGroupRequest syncGroupRequest = new SyncGroupRequest();
         syncGroupRequest.setClientId(clintId);
         syncGroupRequest.setGroupId(groupId);
@@ -439,6 +440,7 @@ public class Coordinator {
                 }
                 return;
             case WAITING:
+                state = ClientState.SYNCING;
                 log.info("[SYNC] ReSync group [{}], clientId [{}]", groupId, clintId);
                 try {
                     sleep(500L);
@@ -448,16 +450,20 @@ public class Coordinator {
                 doSyncGroup();
                 break;
             case REJOIN:
+                state = ClientState.SYNCING;
                 log.info("[SYNC] Rejoin group [{}], clientId [{}]", groupId, clintId);
                 doJoinGroup();
                 break;
             case GROUP_NOT_EXIST:
+                state = ClientState.SYNCING;
                 log.error("[SYNC] Failed to sync group, group [{}] not exist", groupId);
                 throw new IllegalArgumentException("Failed to sync group, group [" + groupId + "] not exist");
             case ERROR:
+                state = ClientState.SYNCING;
                 log.error("[SYNC] Failed to sync group, syncGroupResponse error [{}]", JsonUtils.objToJson(syncGroupResponse));
                 throw new IllegalStateException("Failed to sync group, syncGroupResponse error");
             default:
+                state = ClientState.SYNCING;
                 log.error("[SYNC] Failed to sync group, unknown response [{}]", JsonUtils.objToJson(syncGroupResponse));
                 throw new IllegalStateException("Failed to sync group, unknown response");
         }
