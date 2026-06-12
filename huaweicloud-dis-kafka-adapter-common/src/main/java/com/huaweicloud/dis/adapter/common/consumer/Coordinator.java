@@ -840,7 +840,6 @@ public class Coordinator {
                 if (subscriptions.isAssigned(tp))
                     this.subscriptions.committed(tp, entry.getValue());
             }
-            this.subscriptions.commitsRefreshed();
         }
     }
 

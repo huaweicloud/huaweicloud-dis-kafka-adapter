@@ -372,6 +372,13 @@ public class SubscriptionState {
     }
 
     public boolean isAssigned(StreamPartition tp) {
+        while (assignment.isEmpty()) {
+          try {
+            Thread.sleep(100);
+          } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+          }
+        }
         return assignment.containsKey(tp);
     }
 
