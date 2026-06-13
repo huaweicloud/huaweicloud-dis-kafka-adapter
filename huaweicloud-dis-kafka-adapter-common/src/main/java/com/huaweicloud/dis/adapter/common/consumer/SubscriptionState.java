@@ -58,7 +58,7 @@ public class SubscriptionState {
     private final Set<StreamPartition> userAssignment;
 
     /* the list of partitions currently assigned */
-    private final Map<StreamPartition, StreamPartitionState> assignment;
+    private volatile Map<StreamPartition, StreamPartitionState> assignment;
 
     /* do we need to request a partition assignment from the coordinator? */
     private boolean needsPartitionAssignment;
@@ -345,6 +345,13 @@ public class SubscriptionState {
     }
 
     public boolean hasAllFetchPositions() {
+        while (assignment.isEmpty()) {
+          try {
+            Thread.sleep(100);
+          } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+          }
+        }
         for (StreamPartitionState state : assignment.values())
             if (!state.hasValidPosition())
                 return false;
