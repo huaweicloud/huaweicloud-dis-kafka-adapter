@@ -326,11 +326,18 @@ public class DISConsumer extends AbstractAdapter implements IDISConsumer {
                 fetchResult = fetcher.fetchRecords(remaining);
                 remaining = endTime - System.currentTimeMillis();
             }
-            while (fetchResult.getRecordsCount() == 0 && remaining > 0 && !forceWakeup);
+            while (fetchResult.getRecordsCount() == 0 && remaining > 0 && !forceWakeup && isStable());
             return fetchResult.getRecords();
         } finally {
             release();
         }
+    }
+
+    private boolean isStable() {
+        if(subscriptions.partitionsAutoAssigned()) {
+            return coordinator.isStable();
+        }
+        return true;
     }
 
     @Override

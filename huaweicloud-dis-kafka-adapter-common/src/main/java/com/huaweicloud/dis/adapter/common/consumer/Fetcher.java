@@ -74,14 +74,15 @@ public class Fetcher {
     }
 
     public void sendFetchRequests() {
-        if (!subscriptions.hasAllFetchPositions()) {
+        if (!subscriptions.hasAllFetchPositions() || subscriptions.refreshCommitsNeeded()) {
             coordinator.updateFetchPositions(subscriptions.missingFetchPositions());
         }
 
         Set<StreamPartition> needUpdateOffset = new HashSet<>();
         for (StreamPartition partition : subscriptions.assignedPartitions()) {
             if (!subscriptions.isPaused(partition)) {
-                if (nextIterators.get(partition) == null || nextIterators.get(partition).isExpire()) {
+                PartitionCursor partitionCursor = nextIterators.get(partition);
+                if (partitionCursor == null || partitionCursor.isExpire()) {
                     needUpdateOffset.add(partition);
                     // delete response from future when position reset. but lead to more poll() costs.
                     Future<GetRecordsResult> getRecordsResultFuture = futures.get(partition);
@@ -105,11 +106,12 @@ public class Fetcher {
 
         for (StreamPartition partition : subscriptions.fetchablePartitions()) {
             GetRecordsRequest getRecordsParam = new GetRecordsRequest();
-            if (nextIterators.get(partition) == null || nextIterators.get(partition).isExpire()) {
+            PartitionCursor partitionCursor = nextIterators.get(partition);
+            if (partitionCursor == null || partitionCursor.isExpire()) {
                 log.warn("partition " + partition + " next cursor is null, can not send fetch request");
                 continue;
             }
-            getRecordsParam.setPartitionCursor(nextIterators.get(partition).getNextPartitionCursor());
+            getRecordsParam.setPartitionCursor(partitionCursor.getNextPartitionCursor());
             // getRecordsParam.setAppName(disConfig.getGroupId());
 
             // 设置每次获取最大记录条数

@@ -52,6 +52,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.*;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -63,6 +64,10 @@ public class Coordinator {
     private static final Logger log = LoggerFactory.getLogger(Coordinator.class);
 
     private static final long DEFAULT_GENERATION = -1L;
+
+    private static final Object LOCK = new Object();
+
+    private AtomicBoolean heartbeatDelayedTaskRunning = new AtomicBoolean(false);
 
     private InnerDisClient innerDISClient;
 
@@ -203,56 +208,65 @@ public class Coordinator {
                 delayedTasks.add(this);
             }
 
-            HeartbeatResponse heartbeatResponse;
-            if (state == ClientState.STABLE && generation.get() == -1) {
-                heartbeatResponse = new HeartbeatResponse();
-                heartbeatResponse.setState(HeartbeatResponse.HeartBeatResponseState.JOINING);
-            } else {
-                HeartbeatRequest heartbeatRequest = new HeartbeatRequest();
-                heartbeatRequest.setClientId(clintId);
-                heartbeatRequest.setGroupId(groupId);
-                heartbeatRequest.setGeneration(generation.get());
-                heartbeatResponse = innerDISClient.handleHeartbeatRequest(heartbeatRequest);
+            if (!heartbeatDelayedTaskRunning.compareAndSet(false, true)) {
+                return;
             }
+            try {
+                HeartbeatResponse heartbeatResponse;
+                if (state == ClientState.STABLE && generation.get() == -1) {
+                    heartbeatResponse = new HeartbeatResponse();
+                    heartbeatResponse.setState(HeartbeatResponse.HeartBeatResponseState.JOINING);
+                } else {
+                    HeartbeatRequest heartbeatRequest = new HeartbeatRequest();
+                    heartbeatRequest.setClientId(clintId);
+                    heartbeatRequest.setGroupId(groupId);
+                    heartbeatRequest.setGeneration(generation.get());
+                    heartbeatResponse = innerDISClient.handleHeartbeatRequest(heartbeatRequest);
+                }
 
-            if(state != ClientState.INIT && heartbeatResponse.getState() != HeartbeatResponse.HeartBeatResponseState.STABLE)
-            {
-                log.warn("Group [{}] heartbeat response [{}] is abnormal.", groupId, heartbeatResponse.getState());
-            }
-            //start rebalance
-            if (state == ClientState.STABLE && heartbeatResponse.getState() != HeartbeatResponse.HeartBeatResponseState.STABLE) {
-                subscriptions.listener().onPartitionsRevoked(new HashSet<>(subscriptions.assignedPartitions()));
-                subscriptions.needReassignment();
-                subscriptions.needRefreshCommits();
-                log.info("Start to rejoin group [{}] because of status changes to [{}]", groupId, heartbeatResponse.getState());
-            }
-            //assignment completed
-            if (state == ClientState.SYNCING && heartbeatResponse.getState() == HeartbeatResponse.HeartBeatResponseState.STABLE) {
-                getSubscribeStreamPartitionCount();
-                updateSubscriptions(assignment);
-                subscriptions.listener().onPartitionsAssigned(subscriptions.assignedPartitions());
-                subscriptions.needRefreshCommits();
-                log.info("Client [{}] success to join group [{}], subscription {}", clintId, groupId, assignment);
-            }
-            switch (heartbeatResponse.getState()) {
-                case JOINING:
-                    doJoinGroup();
-                    break;
-                case SYNCING:
-                    doSyncGroup();
-                    break;
-                case STABLE:
-                    if (state == ClientState.SYNCING || state == ClientState.STABLE) {
-                        state = ClientState.STABLE;
-                    } else {
-                        doJoinGroup();
+                if(state != ClientState.INIT && heartbeatResponse.getState() != HeartbeatResponse.HeartBeatResponseState.STABLE)
+                {
+                    log.warn("Group [{}] heartbeat response [{}] is abnormal.", groupId, heartbeatResponse.getState());
+                }
+                //start rebalance
+                if (state == ClientState.STABLE && heartbeatResponse.getState() != HeartbeatResponse.HeartBeatResponseState.STABLE) {
+                    subscriptions.listener().onPartitionsRevoked(new HashSet<>(subscriptions.assignedPartitions()));
+                    subscriptions.needReassignment();
+                    subscriptions.needRefreshCommits();
+                    log.info("Start to rejoin group [{}] because of status changes to [{}]", groupId, heartbeatResponse.getState());
+                }
+                //assignment completed
+                if (state == ClientState.SYNCING && heartbeatResponse.getState() == HeartbeatResponse.HeartBeatResponseState.STABLE) {
+                    synchronized (LOCK) {
+                        getSubscribeStreamPartitionCount();
+                        updateSubscriptions(assignment);
+                        subscriptions.listener().onPartitionsAssigned(subscriptions.assignedPartitions());
+                        subscriptions.needRefreshCommits();
+                        log.info("Client [{}] success to join group [{}], subscription {}", clintId, groupId, assignment);
                     }
-                    break;
-                case GROUP_NOT_EXIST:
-                    log.error("Group [{}] not exist", groupId);
-                    throw new IllegalArgumentException("Group [" + groupId + "] not exist");
-                default:
-                    break;
+                }
+                switch (heartbeatResponse.getState()) {
+                    case JOINING:
+                        doJoinGroup();
+                        break;
+                    case SYNCING:
+                        doSyncGroup();
+                        break;
+                    case STABLE:
+                        if (state == ClientState.SYNCING || state == ClientState.STABLE) {
+                            state = ClientState.STABLE;
+                        } else {
+                            doJoinGroup();
+                        }
+                        break;
+                    case GROUP_NOT_EXIST:
+                        log.error("Group [{}] not exist", groupId);
+                        throw new IllegalArgumentException("Group [" + groupId + "] not exist");
+                    default:
+                        break;
+                }
+            } finally {
+                heartbeatDelayedTaskRunning.set(false);
             }
         }
     }
@@ -639,37 +653,39 @@ public class Coordinator {
     }
 
     public void updateFetchPositions(Set<StreamPartition> partitions) {
-        // refresh commits for all assigned partitions
-        refreshCommittedOffsetsIfNeeded();
+        synchronized (LOCK) {
+            // refresh commits for all assigned partitions
+            refreshCommittedOffsetsIfNeeded();
 
-        Map<StreamPartition, List<Integer>> describeTopic = new HashMap<>();
-        // then do any offset lookups in case some positions are not known
-        // reset the fetch position to the committed position
-        for (StreamPartition tp : partitions) {
-            if (!subscriptions.isAssigned(tp) || subscriptions.isFetchable(tp))
-                continue;
+            Map<StreamPartition, List<Integer>> describeTopic = new HashMap<>();
+            // then do any offset lookups in case some positions are not known
+            // reset the fetch position to the committed position
+            for (StreamPartition tp : partitions) {
+                if (!subscriptions.isAssigned(tp) || subscriptions.isFetchable(tp))
+                    continue;
 
-            // TODO: If there are several offsets to reset, we could submit offset requests in parallel
-            if (subscriptions.isOffsetResetNeeded(tp)) {
-                addPartition(describeTopic, tp);
-                //            resetOffset(tp);
-            } else if (subscriptions.committed(tp) == null) {
-                // there's no committed position, so we need to reset with the default strategy
-                if (isExpandPartition(tp)) {
-                    // Subscribe模式下扩容分区，则从EARLIEST开始防止数据丢失
-                    subscriptions.needOffsetReset(tp, DisOffsetResetStrategy.EARLIEST);
-                    log.info("Find new expand partition {}, checkpoint is null, so will starts from EARLIEST.", tp);
+                // TODO: If there are several offsets to reset, we could submit offset requests in parallel
+                if (subscriptions.isOffsetResetNeeded(tp)) {
+                    addPartition(describeTopic, tp);
+                    //            resetOffset(tp);
+                } else if (subscriptions.committed(tp) == null) {
+                    // there's no committed position, so we need to reset with the default strategy
+                    if (isExpandPartition(tp)) {
+                        // Subscribe模式下扩容分区，则从EARLIEST开始防止数据丢失
+                        subscriptions.needOffsetReset(tp, DisOffsetResetStrategy.EARLIEST);
+                        log.info("Find new expand partition {}, checkpoint is null, so will starts from EARLIEST.", tp);
+                    } else {
+                        subscriptions.needOffsetReset(tp);
+                    }
+                    addPartition(describeTopic, tp);
                 } else {
-                    subscriptions.needOffsetReset(tp);
+                    long committed = subscriptions.committed(tp).offset();
+                    log.debug("Resetting offset for partition {} to the committed offset {}", tp, committed);
+                    subscriptions.seek(tp, committed);
                 }
-                addPartition(describeTopic, tp);
-            } else {
-                long committed = subscriptions.committed(tp).offset();
-                log.debug("Resetting offset for partition {} to the committed offset {}", tp, committed);
-                subscriptions.seek(tp, committed);
             }
+            resetOffsetByTopic(describeTopic);
         }
-        resetOffsetByTopic(describeTopic);
     }
 
     private void resetOffsetByTopic(Map<StreamPartition, List<Integer>> describeTopic) {
@@ -840,6 +856,7 @@ public class Coordinator {
                 if (subscriptions.isAssigned(tp))
                     this.subscriptions.committed(tp, entry.getValue());
             }
+            subscriptions.commitsRefreshed();
         }
     }
 
@@ -913,13 +930,14 @@ public class Coordinator {
         final AtomicReference<Exception> exceptionReference = new AtomicReference<>();
         final CountDownLatch countDownLatch = new CountDownLatch(streamPartitions.size());
         for (StreamPartition partition : streamPartitions) {
-            if (subscriptions.position(partition) == null) {
+            Long position = subscriptions.position(partition);
+            if (position == null) {
                 countDownLatch.countDown();
                 continue;
             }
             // 重设分区位置，清理上一次提交位置
             lastCommitOffsetMap.remove(partition);
-            final String startingSequenceNumber = String.valueOf(subscriptions.position(partition));
+            final String startingSequenceNumber = String.valueOf(position);
             final GetPartitionCursorRequest getShardIteratorParam = new GetPartitionCursorRequest();
             getShardIteratorParam.setPartitionId(Utils.getShardIdStringFromPartitionId(partition.partition()));
             getShardIteratorParam.setStartingSequenceNumber(startingSequenceNumber);
@@ -1154,7 +1172,7 @@ public class Coordinator {
                         return;
                     }
 
-                    if (state == ClientState.STABLE || state == ClientState.SYNCING) {
+                    if (state == ClientState.STABLE) {
 
                         try {
                             long begin = System.currentTimeMillis();

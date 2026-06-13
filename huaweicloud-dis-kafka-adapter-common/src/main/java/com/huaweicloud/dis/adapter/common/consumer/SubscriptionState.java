@@ -345,13 +345,6 @@ public class SubscriptionState {
     }
 
     public boolean hasAllFetchPositions() {
-        while (assignment.isEmpty()) {
-          try {
-            Thread.sleep(50);
-          } catch (InterruptedException e) {
-            throw new RuntimeException(e);
-          }
-        }
         for (StreamPartitionState state : assignment.values())
             if (!state.hasValidPosition())
                 return false;
@@ -379,13 +372,6 @@ public class SubscriptionState {
     }
 
     public boolean isAssigned(StreamPartition tp) {
-        while (assignment.isEmpty()) {
-          try {
-            Thread.sleep(50);
-          } catch (InterruptedException e) {
-            throw new RuntimeException(e);
-          }
-        }
         return assignment.containsKey(tp);
     }
 
