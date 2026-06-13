@@ -347,7 +347,7 @@ public class SubscriptionState {
     public boolean hasAllFetchPositions() {
         while (assignment.isEmpty()) {
           try {
-            Thread.sleep(100);
+            Thread.sleep(50);
           } catch (InterruptedException e) {
             throw new RuntimeException(e);
           }
@@ -381,7 +381,7 @@ public class SubscriptionState {
     public boolean isAssigned(StreamPartition tp) {
         while (assignment.isEmpty()) {
           try {
-            Thread.sleep(100);
+            Thread.sleep(50);
           } catch (InterruptedException e) {
             throw new RuntimeException(e);
           }
